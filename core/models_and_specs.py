@@ -187,7 +187,7 @@ FIELD_SPECS: list[FieldSpec] = [
         normalize=[
             NormalizeRules(
                 tools=["mark_supplier"],
-                supplier_id=119
+                supplier_id=123
             ),
         ],
     ),
