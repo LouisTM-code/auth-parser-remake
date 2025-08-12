@@ -43,6 +43,20 @@ class SelectorVariant:
     extract: ExtractType
     attr: Optional[str] = None
 
+@dataclass(slots=True, frozen=True)
+class NormalizeRules:
+    """
+    Правила нормализации значения поля.
+
+    Attributes:
+        tools: Набор идентификаторов инструментов нормализации. Интерпретируется
+               модулем parsing.normalizer для выбора соответствующих функций.
+               Примеры идентификаторов могут включать преобразование цены в число и т.п.
+        supplier_id: Внешнее условие (идентификатор поставщика), пригодно для
+                     условной нормализации (например, специфические правила артикула).
+    """
+    tools: Optional[list[str]] = None
+    supplier_id: Optional[int] = None
 
 @dataclass(slots=True, frozen=True)
 class FieldSpec:
@@ -50,11 +64,17 @@ class FieldSpec:
     Спецификация поля для извлечения.
     Может содержать несколько альтернативных вариантов (SelectorVariant),
     которые будут проверяться по порядку до первого успеха.
+
+    Attributes:
+        name: Заголовок столбца (строго соответствует требованиям ТЗ).
+        selectors: Список вариантов селекторов/извлечения для поля.
+        is_unique: Участвует ли поле в построении ключа уникальности товара.
+        normalize: Список правил нормализации, обрабатываемых parsing.normalizer.
     """
     name: str
     selectors: list[SelectorVariant]
-    # Новое поле: определяет, участвует ли поле в построении уникального ключа товара.
     is_unique: bool = False
+    normalize: list[NormalizeRules] = field(default_factory=list)
 
 @dataclass(slots=True, frozen=True)
 class ContainerSpecs:
@@ -68,14 +88,6 @@ class ContainerSpecs:
         карточки по ближайшим предкам якоря внутри global-контейнера).
     """
     selectors: list[str] = field(default_factory=list)
-
-# Константа с селекторами контейнеров карточек.
-# Значения задаются фактическими классами сайта; по вашему требованию не выдумываю —
-# оставляю пустой список для fallback-логики в extractor.
-CONTAINER_SPECS: ContainerSpecs = ContainerSpecs(selectors=[
-    "tr.table-view__item",
-    "div.list_item.item_info",
-])
 
 @dataclass(slots=True)
 class ProductRecord:
@@ -172,6 +184,12 @@ FIELD_SPECS: list[FieldSpec] = [
             ),
         ],
         is_unique=True,  # уникальный ключ строим по артикулу
+        normalize=[
+            NormalizeRules(
+                tools=["mark_supplier"],
+                supplier_id=119
+            ),
+        ],
     ),
     FieldSpec(
         name="Наличие",
@@ -190,6 +208,14 @@ FIELD_SPECS: list[FieldSpec] = [
                 extract=ExtractType.TEXT,
             ),
         ],
+        normalize=[
+            NormalizeRules(
+                tools=[
+                    "price_to_float",
+                    "default_clean",
+                ],
+            ),
+        ],
     ),
     FieldSpec(
         name="Оптовая_цена",
@@ -199,13 +225,30 @@ FIELD_SPECS: list[FieldSpec] = [
                 extract=ExtractType.TEXT,
             ),
         ],
+        normalize=[
+            NormalizeRules(
+                tools=[
+                    "price_to_float",
+                    "default_clean",
+                ],
+            ),
+        ],
     ),
 ]
+
+# Константа с селекторами контейнеров карточек.
+# Значения задаются фактическими классами сайта; по вашему требованию не выдумываю —
+# оставляю пустой список для fallback-логики в extractor.
+CONTAINER_SPECS: ContainerSpecs = ContainerSpecs(selectors=[
+    "tr.table-view__item",
+    "div.list_item.item_info",
+])
 
 __all__ = [
     "NA",
     "ExtractType",
     "SelectorVariant",
+    "NormalizeRules",
     "FieldSpec",
     "ContainerSpecs",
     "CONTAINER_SPECS",
