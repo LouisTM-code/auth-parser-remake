@@ -386,5 +386,6 @@ __marimo__/
 
 test*.py
 *.csv
+results*.xlsx
 test_results
 tempdocs
