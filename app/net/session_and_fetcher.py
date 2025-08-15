@@ -23,8 +23,8 @@ from collections.abc import Mapping
 
 import httpx
 
-from core.errors import HttpStatusError, NetworkError, TimeoutError_
-from core.utils_text import add_showall_params
+from app.core.errors import HttpStatusError, NetworkError, TimeoutError_
+from app.core.utils_text import add_showall_params
 
 
 # Дефолтные константы для сессии/пула

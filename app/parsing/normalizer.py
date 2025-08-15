@@ -25,7 +25,7 @@ from typing import Any, Callable, Iterable
 
 import re
 
-from core.models_and_specs import (
+from app.core.models_and_specs import (
     FIELD_SPECS,
     FieldSpec,
     NormalizeRules,

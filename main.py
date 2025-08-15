@@ -2,7 +2,7 @@
 Production entrypoint для Streamlit Cloud.
 
 Локальный запуск:
-  streamlit run streamlit_main.py
+  streamlit run main.py
 
 Поведение:
 - Делегирует рендеринг в `ui.app` (оставлен без изменений).
@@ -85,7 +85,7 @@ def _render_app() -> None:
     """Загружает и перезагружает `ui.app` при каждом повторном запуске, 
     а также патчит константы из secrets/env."""
     try:
-        mod = importlib.import_module("ui.app")
+        mod = importlib.import_module("app.ui.interface")
         mod = importlib.reload(mod)
         _override_constants(mod)
     except ModuleNotFoundError as e:
@@ -108,4 +108,4 @@ _render_app()
 # (ВНИМАНИЕ) НЕ добавляем блок автозапуска через `python`,
 # чтобы избежать рекурсивного спавна серверов при выполнении `streamlit run`.
 # Запускать ТОЛЬКО так:
-#   streamlit run streamlit_main.py
+#   streamlit run main.py

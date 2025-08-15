@@ -35,11 +35,11 @@ from typing import Optional
 import streamlit as st
 
 # ====== Классические импорты из существующих модулей проекта ======
-from pipeline.runner import ParserPipeline, PipelineConfig
-from app_logging.logbus import LogBus
-from ui.state import UIState, UIStatus, ensure_in_session
-from net.session_and_fetcher import SessionManager
-from net.auth import AuthConfig, FormAuthAdapter
+from app.pipeline.runner import ParserPipeline, PipelineConfig
+from app.app_logging.logbus import LogBus
+from app.ui.state import UIState, UIStatus, ensure_in_session
+from app.net.session_and_fetcher import SessionManager
+from app.net.auth import AuthConfig, FormAuthAdapter
 
 # ===================== Константы конфигурации =====================
 # ВАЖНО: замените на реальные учётные данные.

@@ -19,8 +19,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Final
 
-from core.errors import LoginFailedError
-from net.session_and_fetcher import SessionManager
+from app.core.errors import LoginFailedError
+from app.net.session_and_fetcher import SessionManager
 
 
 @dataclass(slots=True, frozen=True)

@@ -33,7 +33,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Iterable, Optional, Iterator
 
-from core.errors import (
+from app.core.errors import (
     LoginFailedError,
     HttpStatusError,
     TimeoutError_,
@@ -41,13 +41,13 @@ from core.errors import (
     StopRequestedError,
     ErrorCode,
 )
-from app_logging.logbus import LogBus
-from ui.state import UIState, UIStatus
-from export_io.writer import XlsxWriterService
-from net.session_and_fetcher import SessionManager, PageFetcher, FetchedPage
-from parsing.extractor import ProductExtractor
-from parsing.normalizer import PriceNormalizer
-from core.models_and_specs import ProductRecord
+from app.app_logging.logbus import LogBus
+from app.ui.state import UIState, UIStatus
+from app.export_io.writer import XlsxWriterService
+from app.net.session_and_fetcher import SessionManager, PageFetcher, FetchedPage
+from app.parsing.extractor import ProductExtractor
+from app.parsing.normalizer import PriceNormalizer
+from app.core.models_and_specs import ProductRecord
 
 
 # ================================ Конфиг ================================

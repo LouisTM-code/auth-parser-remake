@@ -17,7 +17,7 @@ from collections import OrderedDict
 from typing import Iterable, Literal
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from core.models_and_specs import NA
+from app.core.models_and_specs import NA
 
 
 _WS_RE = re.compile(r"\s+", flags=re.MULTILINE)

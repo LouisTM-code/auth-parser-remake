@@ -34,7 +34,7 @@ try:
 except Exception:  # pragma: no cover
     from selectolax.parser import HTMLParser as _HTMLParser  # type: ignore
 
-from core.models_and_specs import (
+from app.core.models_and_specs import (
     FIELD_SPECS,
     CONTAINER_SPECS,
     ExtractType,
@@ -42,7 +42,7 @@ from core.models_and_specs import (
     ProductRecord,
     ParseIssue,
 )
-from core.utils_text import clean_text, normalize_price_to_float_or_na
+from app.core.utils_text import clean_text, normalize_price_to_float_or_na
 
 
 # ------------------------------ Конфиг ---------------------------------

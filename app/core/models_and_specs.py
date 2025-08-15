@@ -101,10 +101,10 @@ class ProductRecord:
     """
     # Имена соответствуют ТЗ. Обратите внимание на пробелы в двух последних именах.
     Товар: str | Literal["NA"]
+    Оптовая_цена: str | float | Literal["NA"]
     Артикул: str | Literal["NA"]
     Наличие: str | Literal["NA"]
     Розничная_цена: str | float | Literal["NA"]
-    Оптовая_цена: str | float | Literal["NA"]
 
     def to_ordered_values(self) -> list[str | float]:
         """
@@ -113,10 +113,10 @@ class ProductRecord:
         """
         return [
             self.Товар,
+            self.Оптовая_цена,
             self.Артикул,
             self.Наличие,
             self.Розничная_цена,
-            self.Оптовая_цена,
         ]
 
 
@@ -176,6 +176,23 @@ FIELD_SPECS: list[FieldSpec] = [
         ],
     ),
     FieldSpec(
+        name="Оптовая_цена",
+        selectors=[
+            SelectorVariant(
+                selector="div.price_group.min span.price_value",
+                extract=ExtractType.TEXT,
+            ),
+        ],
+        normalize=[
+            NormalizeRules(
+                tools=[
+                    "price_to_float",
+                    "default_clean",
+                ],
+            ),
+        ],
+    ),
+    FieldSpec(
         name="Артикул",
         selectors=[
             SelectorVariant(
@@ -205,23 +222,6 @@ FIELD_SPECS: list[FieldSpec] = [
         selectors=[
             SelectorVariant(
                 selector="div.price.font-bold.font_mxs span.price_value",
-                extract=ExtractType.TEXT,
-            ),
-        ],
-        normalize=[
-            NormalizeRules(
-                tools=[
-                    "price_to_float",
-                    "default_clean",
-                ],
-            ),
-        ],
-    ),
-    FieldSpec(
-        name="Оптовая_цена",
-        selectors=[
-            SelectorVariant(
-                selector="div.price_group.min span.price_value",
                 extract=ExtractType.TEXT,
             ),
         ],
