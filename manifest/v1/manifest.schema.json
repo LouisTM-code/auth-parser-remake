@@ -1,0 +1,174 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:auth-parser:manifest:v1",
+    "title": "ConfigManifest v1",
+    "description": "JSON Schema для манифеста конфигураций. Источник правды для списка профилей и их местоположения. Используется в ConfigLoader до нормализации/DTO.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "meta",
+        "configs"
+    ],
+    "properties": {
+        "meta": {
+            "type": "object",
+            "description": "Метаданные манифеста",
+            "additionalProperties": false,
+            "required": [
+                "manifest_id",
+                "version",
+                "created_at"
+            ],
+            "properties": {
+                "manifest_id": {
+                    "type": "string",
+                    "pattern": "^manifest:[A-Za-z0-9._:-]+$",
+                    "description": "Стабильный ID манифеста (например, manifest:cnc1-default)"
+                },
+                "version": {
+                    "$ref": "#/$defs/semver",
+                    "description": "Версия самого манифеста (SemVer)"
+                },
+                "created_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Момент создания в ISO 8601 (UTC)"
+                },
+                "description": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Человекочитаемое описание"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": []
+                }
+            }
+        },
+        "configs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "$ref": "#/$defs/config_entry"
+            },
+            "$comment": "Проверка наличия всех обязательных типов выполняется в бизнес-логике ConfigLoader; схема гарантирует форму и значения."
+        }
+    },
+    "$defs": {
+        "semver": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "description": "Строгий SemVer: MAJOR.MINOR.PATCH"
+        },
+        "version_constraint": {
+            "type": "string",
+            "pattern": "^(?:\\d+\\.\\d+\\.\\d+|\\d+\\.x|\\d+\\.\\d+\\.x)$",
+            "description": "Ожидаемая версия профиля: точная (1.2.3) или с подстановками по правилам: '1.x' либо '1.2.x'"
+        },
+        "config_type": {
+            "type": "string",
+            "enum": [
+                "pipeline",
+                "site",
+                "url",
+                "network",
+                "auth",
+                "logging",
+                "export"
+            ],
+            "description": "Тип подключаемого профиля"
+        },
+        "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\.json$",
+            "description": "Путь к JSON-файлу профиля относительно рабочего каталога или абсолютный"
+        },
+        "config_entry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "type",
+                "config_id",
+                "path",
+                "expected_version"
+            ],
+            "$comment": "Детальное соответствие (type=pipeline ⇒ config_id^=pipeline:) переносим в ConfigLoader как бизнес-проверку.",
+            "properties": {
+                "type": {
+                    "$ref": "#/$defs/config_type"
+                },
+                "config_id": {
+                    "type": "string",
+                    "minLength": 3,
+                    "pattern": "^[a-z]+:[A-Za-z0-9._:-]+$",
+                    "description": "Стабильный ID профиля в формате <type>:<name> (например, network:default)"
+                },
+                "path": {
+                    "$ref": "#/$defs/path"
+                },
+                "expected_version": {
+                    "$ref": "#/$defs/version_constraint"
+                }
+            }
+        }
+    },
+    "examples": [
+        {
+            "meta": {
+                "manifest_id": "manifest:cnc1-default",
+                "version": "1.0.0",
+                "created_at": "2025-08-22T12:00:00Z",
+                "description": "Манифест для пайплайна"
+            },
+            "configs": [
+                {
+                    "type": "pipeline",
+                    "config_id": "pipeline:default",
+                    "path": "configs/pipeline_default.json",
+                    "expected_version": "1.0.0"
+                },
+                {
+                    "type": "site",
+                    "config_id": "site:cnc1",
+                    "path": "configs/sites/cnc1.json",
+                    "expected_version": "1.0.0"
+                },
+                {
+                    "type": "url",
+                    "config_id": "url:cnc1",
+                    "path": "configs/urls/cnc1.json",
+                    "expected_version": "1.0.0"
+                },
+                {
+                    "type": "network",
+                    "config_id": "network:default",
+                    "path": "configs/network_default.json",
+                    "expected_version": "1.0.0"
+                },
+                {
+                    "type": "auth",
+                    "config_id": "auth:cnc1",
+                    "path": "configs/auth/cnc1.json",
+                    "expected_version": "1.0.0"
+                },
+                {
+                    "type": "logging",
+                    "config_id": "logging:default",
+                    "path": "configs/logging_default.json",
+                    "expected_version": "1.0.0"
+                },
+                {
+                    "type": "export",
+                    "config_id": "export:default",
+                    "path": "configs/export_xlsx.json",
+                    "expected_version": "1.0.0"
+                }
+            ]
+        }
+    ],
+    "$comment": "Уникальность $id проверяется вне схемы (линтером). Уникальность типов в массиве configs и полнота набора типов контролируются в ConfigLoader."
+}
