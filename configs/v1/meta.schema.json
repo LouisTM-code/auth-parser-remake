@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auth-parser:defs:v1:meta",
+  "title": "Config Meta (v1)",
+  "description": "Общие метаданные профилей конфигурации. Единый формат для всех типов профилей. Выбор активных профилей осуществляется через meta.active_profiles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pipeline_step", "config_id", "version"],
+  "properties": {
+    "pipeline_step": {
+      "type": "string",
+      "description": "Тип профиля/этап конвейера.",
+      "enum": ["pipeline", "site", "url", "network", "auth", "logging", "export"]
+    },
+    "config_id": {
+      "type": "string",
+      "description": "Стабильный идентификатор конфига (namespace:name). Должен совпадать с тем, что указан в манифесте.",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "description": "Версия профиля в формате SemVer.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Человекочитаемое описание профиля.",
+      "default": ""
+    },
+    "tags": {
+      "type": "array",
+      "description": "Произвольные метки (не влияют на валидацию/исполнение).",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "active_profiles": {
+      "type": "array",
+      "description": "Список profile_id, которые должны быть активированы. Если пусто — используется первый профиль из массива profiles.",
+      "items": { "type": "string" },
+      "default": []
+    }
+  },
+  "examples": [
+    {
+      "pipeline_step": "network",
+      "config_id": "network:default",
+      "version": "1.0.0",
+      "description": "Сетевой профиль по умолчанию",
+      "tags": ["prod"],
+      "active_profiles": []
+    }
+  ]
+}

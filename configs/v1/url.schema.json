@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auth-parser:config:v1:url",
+  "title": "URL Config (v1)",
+  "description": "Правила детерминированной трансформации URL до сетевого запроса. Единая форма: meta + profiles[]. Выбор активных профилей — через meta.active_profiles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "profiles"],
+  "properties": {
+    "meta": {
+      "$ref": "./meta.schema.json",
+      "description": "Общие метаданные профиля (pipeline_step, config_id, version и пр.)."
+    },
+    "profiles": {
+      "type": "array",
+      "description": "Список профилей URL-трансформаций. Если meta.active_profiles пуст — используется первый профиль.",
+      "items": { "$ref": "#/$defs/url_profile" },
+      "default": []
+    }
+  },
+
+  "$defs": {
+    "url_profile": {
+      "title": "UrlProfile",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "rules"],
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "description": "Уникальный идентификатор профиля в рамках файла."
+        },
+        "rules": {
+          "type": "array",
+          "description": "Упорядоченный список правил. Порядок имеет значение.",
+          "items": { "$ref": "#/$defs/url_rule" },
+          "default": []
+        }
+      }
+    },
+
+    "url_rule": {
+      "title": "UrlRule",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition", "action"],
+      "properties": {
+        "condition": {
+          "$ref": "#/$defs/url_condition",
+          "description": "Все указанные условия должны быть истинны (логика AND)."
+        },
+        "action": {
+          "type": "string",
+          "description": "Операция трансформации URL.",
+          "enum": ["add_params", "remove_params", "normalize_slash", "replace_host", "strip_fragment"]
+        },
+        "params": {
+          "description": "Параметры операции (generic). Конкретная форма интерпретируется модулем-потребителем (UrlTransformer).",
+          "type": ["object", "array", "null"],
+          "default": {}
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Чем меньше, тем раньше применяется правило. При равенстве — порядок в массиве.",
+          "default": 100
+        }
+      }
+    },
+
+    "url_condition": {
+      "title": "UrlCondition",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Совпадение netloc (без схемы/порта), например: \"example.com\"."
+        },
+        "path_regex": {
+          "type": "string",
+          "description": "Регулярное выражение для URL path (Python-совместимое). Валидность и компиляция — на стороне потребителя."
+        },
+        "has_param": {
+          "type": "string",
+          "description": "Истина, если указанный ключ параметра присутствует в query."
+        },
+        "scheme": {
+          "type": "string",
+          "description": "Схема URL.",
+          "enum": ["http", "https"]
+        }
+      }
+    }
+  },
+
+  "examples": [
+    {
+      "meta": {
+        "pipeline_step": "url",
+        "config_id": "url:demo",
+        "version": "1.0.0",
+        "description": "Демонстрационный профиль URL-трансформации",
+        "tags": ["demo"],
+        "active_profiles": []
+      },
+      "profiles": [
+        {
+          "profile_id": "profile:prod",
+          "rules": [
+            {
+              "condition": { "host": "cnc1.ru", "path_regex": "^/catalog/.+" },
+              "action": "add_params",
+              "params": [
+                { "key": "SHOWALL_1", "value": "1", "overwrite": true },
+                { "key": "SHOWALL_3", "value": "1", "overwrite": true }
+              ],
+              "priority": 10
+            },
+            {
+              "condition": { "host": "cnc1.ru", "has_param": "page" },
+              "action": "remove_params",
+              "params": [
+                { "key": "page" },
+                { "key": "utm_source" }
+              ],
+              "priority": 20
+            },
+            {
+              "condition": { "host": "cnc1.ru" },
+              "action": "normalize_slash",
+              "params": { "mode": "ensure" },
+              "priority": 30
+            }
+          ]
+        },
+        {
+          "profile_id": "profile:test",
+          "rules": [
+            {
+              "condition": { "host": "test.cnc1.ru" },
+              "action": "replace_host",
+              "params": { "new_host": "staging.cnc1.ru" },
+              "priority": 5
+            },
+            {
+              "condition": { "path_regex": "^/search/" },
+              "action": "strip_fragment",
+              "params": {},
+              "priority": 15
+            }
+          ]
+        }
+      ]
+    }
+  ],
+
+  "$comment": "Требования проекта: 1) profiles всегда массив; 2) выбор активных профилей — только через meta.active_profiles; 3) пустые/несуществующие profile_id и другие fail-fast проверки — ответственность ConfigLoader; 4) Поле params — generic (object|array|null); семантика и валидация по action полностью на стороне модуля-потребителя (UrlTransformer)."
+}

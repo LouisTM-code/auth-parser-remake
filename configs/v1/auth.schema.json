@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auth-parser:config:v1:auth",
+  "title": "Auth Config (v1-min)",
+  "description": "meta + profiles[]. В v1 поддерживаются ветки form и api_token. Выбор профилей через meta.active_profiles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "profiles"],
+  "properties": {
+    "meta": {
+      "$ref": "./meta.schema.json",
+      "description": "Общие метаданные профиля."
+    },
+    "profiles": {
+      "type": "array",
+      "description": "Если meta.active_profiles пуст — используется первый элемент.",
+      "default": [],
+      "items": { "$ref": "#/$defs/profile" }
+    }
+  },
+
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "title": "AuthProfile",
+      "additionalProperties": false,
+      "required": ["profile_id", "auth_type"],
+      "properties": {
+        "profile_id": { "type": "string", "description": "Уникальный ID профиля." },
+        "auth_type": {
+          "type": "string",
+          "description": "Поддерживаемые ветки v1.",
+          "enum": ["form", "api_token"]
+        },
+
+        "request": {
+          "$ref": "#/$defs/auth_request",
+          "description": "HTTP-запрос логина. Требуется только для form.",
+          "default": null
+        },
+
+        "form_fields": {
+          "type": ["object", "null"],
+          "description": "Ключи формы для form. Значения допускают ${env:...}/${secret:...}.",
+          "default": null,
+          "additionalProperties": { "type": "string" }
+        },
+
+        "csrf": {
+          "$ref": "#/$defs/csrf_spec",
+          "description": "CSRF для form.",
+          "default": { "enabled": false }
+        },
+
+        "success_checks": {
+          "type": "array",
+          "description": "Критерии успеха (AND). Минимальный набор v1.",
+          "default": [],
+          "items": { "$ref": "#/$defs/success_check" }
+        },
+
+        "api_token": {
+          "$ref": "#/$defs/api_token_spec",
+          "description": "Настройка токена для ветки api_token.",
+          "default": { "enabled": false }
+        }
+      }
+    },
+
+    "auth_request": {
+      "type": "object",
+      "title": "AuthRequest",
+      "additionalProperties": false,
+      "required": ["method", "endpoint"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+          "description": "HTTP-метод."
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "Абсолютный URL точки входа.",
+          "minLength": 1
+        },
+        "headers": {
+          "type": "object",
+          "description": "Доп. заголовки.",
+          "default": {},
+          "additionalProperties": { "type": "string" }
+        },
+        "timeout_s": {
+          "type": ["number", "null"],
+          "description": "Локальный таймаут логина. null — брать из network.",
+          "default": null
+        },
+        "redirect_policy": {
+          "type": "string",
+          "enum": ["follow", "error", "ignore"],
+          "description": "Поведение при 3xx.",
+          "default": "follow"
+        }
+      }
+    },
+
+    "csrf_spec": {
+      "type": "object",
+      "title": "CsrfSpec",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Включить шаг CSRF." },
+        "source_url": { "type": ["string", "null"], "default": null, "description": "Откуда брать токен." },
+        "token_selector": { "type": ["string", "null"], "default": null, "description": "CSS-селектор токена." },
+        "token_field_name": { "type": ["string", "null"], "default": null, "description": "Имя поля формы для токена." }
+      }
+    },
+
+    "success_check": {
+      "type": "object",
+      "title": "SuccessCheck",
+      "additionalProperties": false,
+      "required": ["check_type", "params"],
+      "properties": {
+        "check_type": {
+          "type": "string",
+          "enum": ["status_code", "header_present", "body_not_contains"],
+          "description": "Минимальный набор v1."
+        },
+        "params": {
+          "type": "object",
+          "description": "Форма зависит от check_type; валидируется в ConfigLoader.",
+          "default": {},
+          "additionalProperties": true
+        }
+      }
+    },
+
+    "api_token_spec": {
+      "type": "object",
+      "title": "ApiTokenSpec",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Включить ветку api_token." },
+        "token_header": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Имя заголовка (например, Authorization)."
+        },
+        "token_value": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Значение токена (${env:API_TOKEN}/${secret:...})."
+        }
+      }
+    }
+  },
+
+  "examples": [
+    {
+      "meta": {
+        "pipeline_step": "auth",
+        "config_id": "auth:demo",
+        "version": "1.0.0",
+        "description": "Демо профиль авторизации",
+        "tags": ["demo", "auth"],
+        "active_profiles": []
+      },
+      "profiles": [
+        {
+          "profile_id": "auth:demo:form",
+          "auth_type": "form",
+          "request": {
+            "method": "POST",
+            "endpoint": "https://example.com/auth/login",
+            "headers": { "Content-Type": "application/x-www-form-urlencoded" }
+          },
+          "form_fields": {
+            "USER_LOGIN": "${env:AUTH_EMAIL}",
+            "USER_PASSWORD": "${env:AUTH_PASSWORD}"
+          },
+          "csrf": { "enabled": true, "source_url": "https://example.com/login", "token_selector": "input[name='sessid']", "token_field_name": "sessid" },
+          "success_checks": [
+            { "check_type": "status_code", "params": { "allowed": [200, 302] } },
+            { "check_type": "header_present", "params": { "key": "Set-Cookie" } },
+            { "check_type": "body_not_contains", "params": { "patterns": ["ошибка"] } }
+          ]
+        },
+        {
+          "profile_id": "auth:demo:token",
+          "auth_type": "api_token",
+          "api_token": { "enabled": true, "token_header": "Authorization", "token_value": "${env:API_TOKEN}" }
+        }
+      ]
+    }
+  ]
+}

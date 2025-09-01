@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auth-parser:config:v1:export",
+  "title": "Export Config (v1)",
+  "description": "Параметры экспорта результатов (XLSX). Единый формат: meta + profiles[]. Выбор активных профилей — через meta.active_profiles. many_id не используется.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "profiles"],
+  "properties": {
+    "meta": {
+      "$ref": "./meta.schema.json",
+      "description": "Общие метаданные профиля (pipeline_step, config_id, version, tags, active_profiles)."
+    },
+    "profiles": {
+      "type": "array",
+      "description": "Список профилей экспорта. Если meta.active_profiles пуст — используется первый профиль.",
+      "items": { "$ref": "#/$defs/export_profile" },
+      "default": []
+    }
+  },
+  "$defs": {
+    "export_profile": {
+      "title": "Export Profile",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "filename_pattern",
+        "sheet_name_max_len",
+        "sheet_name_core_limit",
+        "multiple_sheets",
+        "sheet_styles",
+        "empty_sheet_name"
+      ],
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "description": "Уникальный ID профиля для трассировки.",
+          "minLength": 1
+        },
+
+        "filename_pattern": {
+          "type": "string",
+          "description": "Шаблон имени файла. Поддерживаемые плейсхолдеры: {date}=YYYYMMDD, {time}=HHMM, {site}=site_id, {profile}=profile_id. Неподдерживаемые токены игнорируются/не подставляются."
+        },
+
+        "sheet_name_max_len": {
+          "type": "integer",
+          "description": "Максимальная длина имени листа (Excel hard limit = 31).",
+          "minimum": 1,
+          "maximum": 31
+        },
+
+        "sheet_name_core_limit": {
+          "type": "integer",
+          "description": "Длина «ядра» имени без служебных суффиксов (для коллизий).",
+          "minimum": 1,
+          "maximum": 31
+        },
+
+        "multiple_sheets": {
+          "type": "boolean",
+          "description": "Разбивать результат на несколько листов (например, по site_id)."
+        },
+
+        "sheet_styles": {
+          "type": "object",
+          "description": "Оформление таблиц в XLSX.",
+          "additionalProperties": false,
+          "required": ["header", "cell", "freeze_header", "autowidth"],
+          "properties": {
+            "header": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {
+                "bold": { "type": "boolean", "description": "Жирный шрифт." },
+                "align": {
+                  "type": "string",
+                  "description": "Горизонтальное выравнивание.",
+                  "enum": ["left", "center", "right", "justify"]
+                },
+                "valign": {
+                  "type": "string",
+                  "description": "Вертикальное выравнивание.",
+                  "enum": ["top", "vcenter", "bottom"]
+                },
+                "bg_color": {
+                  "type": "string",
+                  "description": "Цвет фона (например, #F2F2F2)."
+                },
+                "font_color": {
+                  "type": "string",
+                  "description": "Цвет текста (например, #000000)."
+                },
+                "border": {
+                  "type": "integer",
+                  "description": "Толщина границ (0..3).",
+                  "minimum": 0,
+                  "maximum": 3
+                },
+                "text_wrap": {
+                  "type": "boolean",
+                  "description": "Перенос по словам."
+                }
+              }
+            },
+            "cell": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {
+                "align": {
+                  "type": "string",
+                  "enum": ["left", "center", "right", "justify"],
+                  "description": "Горизонтальное выравнивание."
+                },
+                "valign": {
+                  "type": "string",
+                  "enum": ["top", "vcenter", "bottom"],
+                  "description": "Вертикальное выравнивание."
+                },
+                "border": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3,
+                  "description": "Толщина границ (0..3)."
+                },
+                "text_wrap": {
+                  "type": "boolean",
+                  "description": "Перенос по словам."
+                }
+              }
+            },
+            "freeze_header": {
+              "type": "boolean",
+              "description": "Заморозить первую строку."
+            },
+            "autowidth": {
+              "type": "boolean",
+              "description": "Автоподбор ширины колонок."
+            }
+          }
+        },
+
+        "empty_sheet_name": {
+          "type": "string",
+          "description": "Имя листа при отсутствии данных.",
+          "minLength": 1
+        }
+      },
+
+      "$comment": "Перекрёстная проверка sheet_name_core_limit ≤ sheet_name_max_len выполняется в ConfigLoader (см. требования). Также Loader нормализует имена листов под ограничения Excel и разрешает коллизии суффиксами."
+    }
+  },
+
+  "examples": [
+    {
+      "meta": {
+        "pipeline_step": "export",
+        "config_id": "export:xlsx-default",
+        "version": "1.0.0",
+        "description": "Экспорт XLSX по умолчанию",
+        "tags": ["xlsx", "default"],
+        "active_profiles": []
+      },
+      "profiles": [
+        {
+          "profile_id": "export:xlsx-default",
+          "filename_pattern": "results_{site}_{date}_{time}.xlsx",
+          "sheet_name_max_len": 31,
+          "sheet_name_core_limit": 28,
+          "multiple_sheets": true,
+          "sheet_styles": {
+            "header": {
+              "bold": true,
+              "align": "center",
+              "valign": "vcenter",
+              "bg_color": "#F2F2F2",
+              "font_color": "#000000",
+              "border": 1,
+              "text_wrap": true
+            },
+            "cell": {
+              "align": "left",
+              "valign": "top",
+              "border": 1,
+              "text_wrap": false
+            },
+            "freeze_header": true,
+            "autowidth": true
+          },
+          "empty_sheet_name": "Empty"
+        }
+      ]
+    }
+  ],
+
+  "$comment": "Fail-fast проверки массива profiles (пустой массив, отсутствующие profile_id из active_profiles) — ответственность ConfigLoader согласно правилам проекта. $ref указывает на локальный ./meta.schema.json; убедитесь, что URN всех схем уникален и ссылки разрешимы."
+}

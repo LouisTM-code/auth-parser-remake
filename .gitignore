@@ -389,3 +389,4 @@ test*.py
 results*.xlsx
 test_results
 tempdocs
+requirements_*.txt

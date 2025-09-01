@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auth-parser:config:v1:logging",
+  "title": "Logging Config (v1)",
+  "description": "Схема профиля логирования: LogBus, UI-параметры и политика событий. Универсальная форма: meta + profiles[]. Выбор активных профилей выполняется через meta.active_profiles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "profiles"],
+  "properties": {
+    "meta": {
+      "$ref": "./meta.schema.json",
+      "description": "Общие метаданные профиля (pipeline_step, config_id, version и пр.)."
+    },
+    "profiles": {
+      "type": "array",
+      "description": "Набор вариантов профиля логирования.",
+      "items": { "$ref": "#/$defs/logging_profile" },
+      "default": []
+    }
+  },
+
+  "$defs": {
+    "log_level": {
+      "type": "string",
+      "enum": ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"],
+      "description": "Допустимый уровень логирования."
+    },
+
+    "logging_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "logbus", "ui", "events"],
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "description": "Уникальный ID профиля для трассировки.",
+          "minLength": 1
+        },
+        "logbus": {
+          "$ref": "#/$defs/logbus_spec",
+          "description": "Параметры очереди событий и drain-поведения."
+        },
+        "ui": {
+          "$ref": "#/$defs/ui_spec",
+          "description": "Параметры отображения логов в UI."
+        },
+        "events": {
+          "$ref": "#/$defs/events_policy",
+          "description": "Политика уровней и агрегации событий."
+        }
+      }
+    },
+
+    "logbus_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queue_max_size", "drain_batch_limit", "drop_oldest"],
+      "properties": {
+        "queue_max_size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Максимальная ёмкость очереди событий."
+        },
+        "drain_batch_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Максимум событий, извлекаемых за один цикл обработки."
+        },
+        "drop_oldest": {
+          "type": "boolean",
+          "description": "Стратегия при переполнении: true — удалять старые, false — отклонять новые."
+        }
+      }
+    },
+
+    "ui_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["log_buffer_max_lines", "batch_pull", "render_limit", "poll_interval_ms", "level"],
+      "properties": {
+        "log_buffer_max_lines": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Размер кольцевого буфера отображения."
+        },
+        "batch_pull": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Сколько событий UI запрашивает за один тик."
+        },
+        "render_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Максимум строк, выводимых за раз."
+        },
+        "poll_interval_ms": {
+          "type": "integer",
+          "minimum": 50,
+          "description": "Интервал опроса LogBus UI-слоем, мс (рекомендуется ≥ 50)."
+        },
+        "level": {
+          "$ref": "#/$defs/log_level",
+          "description": "Минимальный уровень отображения в UI."
+        }
+      }
+    },
+
+    "events_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["levels", "aggregate_batch_summary", "include_context"],
+      "properties": {
+        "levels": {
+          "type": "array",
+          "description": "Белый список допустимых уровней входящих событий.",
+          "items": { "$ref": "#/$defs/log_level" },
+          "default": ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"]
+        },
+        "aggregate_batch_summary": {
+          "type": "boolean",
+          "description": "Включает агрегацию однотипных событий в сводки."
+        },
+        "include_context": {
+          "type": "boolean",
+          "description": "Добавлять в событие контекст (task_id, url и т.д.)."
+        }
+      },
+      "$comment": "Семантическая проверка согласованности: ui.level ∈ events.levels и обработка недопустимых уровней выполняется в ConfigLoader (fail-fast)."
+    }
+  },
+
+  "examples": [
+    {
+      "meta": {
+        "pipeline_step": "logging",
+        "config_id": "logging:default",
+        "version": "1.0.0",
+        "description": "Демонстрационный профиль логирования",
+        "tags": ["default"],
+        "active_profiles": []
+      },
+      "profiles": [
+        {
+          "profile_id": "logging:default",
+          "logbus": { "queue_max_size": 2000, "drain_batch_limit": 200, "drop_oldest": true },
+          "ui": { "log_buffer_max_lines": 2000, "batch_pull": 200, "render_limit": 2000, "poll_interval_ms": 500, "level": "INFO" },
+          "events": { "levels": ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"], "aggregate_batch_summary": true, "include_context": true }
+        }
+      ]
+    }
+  ]
+}

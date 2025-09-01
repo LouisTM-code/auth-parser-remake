@@ -1,0 +1,280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auth-parser:config:v1:network",
+  "title": "Network Config (v1)",
+  "description": "Сетевой профиль: HTTP-сессия, политика ретраев и ограничение скорости. Единственный формат для всех файлов v1: meta + profiles[].",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "profiles"],
+  "properties": {
+    "meta": {
+      "$ref": "./meta.schema.json",
+      "description": "Общие метаданные профиля (pipeline_step, config_id, version, tags, active_profiles)."
+    },
+    "profiles": {
+      "type": "array",
+      "description": "Список профилей. Выбор активных — через meta.active_profiles. Пусто → используется первый профиль.",
+      "default": [],
+      "items": { "$ref": "#/$defs/network_profile" }
+    }
+  },
+
+  "$defs": {
+    "network_profile": {
+      "title": "NetworkProfile",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "concurrency", "session", "retry_policy", "rate_limit"],
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "description": "Идентификатор профиля, уникальный внутри файла."
+        },
+        "concurrency": {
+          "type": "integer",
+          "description": "Максимум конкурентных запросов в сетевом слое.",
+          "minimum": 1,
+          "default": 24
+        },
+        "session": {
+          "$ref": "#/$defs/network_session",
+          "description": "Параметры HTTP-сессии клиента."
+        },
+        "retry_policy": {
+          "$ref": "#/$defs/retry_policy",
+          "description": "Глобальные правила повторов запросов."
+        },
+        "rate_limit": {
+          "$ref": "#/$defs/rate_limit",
+          "description": "Ограничение скорости (RPS/бурст/джиттер)."
+        }
+      }
+    },
+
+    "network_session": {
+      "title": "NetworkSession",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connect_timeout_s",
+        "read_timeout_s",
+        "write_timeout_s",
+        "max_connections",
+        "max_keepalive_connections",
+        "http2",
+        "default_headers",
+        "verify_tls"
+      ],
+      "properties": {
+        "base_url": {
+          "type": ["string", "null"],
+          "description": "Базовый URL; null — использовать абсолютные URL.",
+          "default": null
+        },
+        "connect_timeout_s": {
+          "type": "number",
+          "minimum": 0,
+          "default": 5.0
+        },
+        "read_timeout_s": {
+          "type": "number",
+          "minimum": 0,
+          "default": 10.0
+        },
+        "write_timeout_s": {
+          "type": "number",
+          "minimum": 0,
+          "default": 10.0
+        },
+        "request_timeout_s": {
+          "type": ["number", "null"],
+          "description": "End-to-end таймаут одной попытки запроса; null — использовать поведение клиента по умолчанию.",
+          "minimum": 0,
+          "default": null
+        },
+        "max_connections": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 64
+        },
+        "max_keepalive_connections": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 20
+        },
+        "http2": {
+          "type": "boolean",
+          "default": true
+        },
+        "default_headers": {
+          "type": "object",
+          "description": "Базовые заголовки клиента (str→str).",
+          "additionalProperties": { "type": "string" },
+          "default": {
+            "User-Agent": "Mozilla/5.0 (compatible; ParserBot/1.0)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Language": "ru-RU,ru;q=0.9",
+            "Cache-Control": "no-cache"
+          }
+        },
+        "verify_tls": {
+          "type": "boolean",
+          "default": true
+        },
+        "ca_path": {
+          "type": ["string", "null"],
+          "description": "Кастомный CA bundle; null — системный.",
+          "default": null
+        }
+      },
+      "$comment": "Кросс-проверки вроде согласования request_timeout_s с retry_policy.timeout_budget_s выполняет ConfigLoader (fail-fast), не JSON Schema."
+    },
+
+    "retry_policy": {
+      "title": "RetryPolicy",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_attempts",
+        "initial_delay_s",
+        "backoff_multiplier",
+        "max_delay_s",
+        "timeout_budget_s",
+        "retry_on_status",
+        "retry_on_exceptions_category"
+      ],
+      "properties": {
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3
+        },
+        "initial_delay_s": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.3
+        },
+        "backoff_multiplier": {
+          "type": "number",
+          "minimum": 1.0,
+          "default": 2.0
+        },
+        "max_delay_s": {
+          "type": "number",
+          "minimum": 0,
+          "default": 10.0
+        },
+        "timeout_budget_s": {
+          "type": "number",
+          "minimum": 0,
+          "default": 30.0
+        },
+        "retry_non_idempotent": {
+          "type": ["boolean", "null"],
+          "description": "Разрешать ли ретраи для неидемпотентных методов (POST/PUT/PATCH). По умолчанию запрещено.",
+          "default": false
+        },
+        "retry_on_status": {
+          "type": "array",
+          "description": "Коды/маски статусов, при которых выполняется повтор (например, 500, 502, 429, \"5xx\").",
+          "items": { "type": ["integer", "string"] },
+          "default": ["5xx", 429]
+        },
+        "retry_on_exceptions_category": {
+          "type": "array",
+          "description": "Категории исключений для ретраев.",
+          "items": {
+            "type": "string",
+            "enum": ["timeout", "network", "connection"]
+          },
+          "default": ["timeout", "network", "connection"]
+        }
+      },
+      "$comment": "Проверка, что timeout_budget_s покрывает сумму попыток с учётом задержек backoff — обязанность ConfigLoader (fail-fast)."
+    },
+
+    "rate_limit": {
+      "title": "RateLimit",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "requests_per_second", "burst_size", "jitter_s"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "requests_per_second": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        },
+        "burst_size": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20
+        },
+        "jitter_s": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.5
+        }
+      },
+      "$comment": "Проверка burst_size ≥ requests_per_second переносится в ConfigLoader (fail-fast)."
+    }
+  },
+
+  "examples": [
+    {
+      "meta": {
+        "pipeline_step": "network",
+        "config_id": "network:default",
+        "version": "1.0.0",
+        "description": "Сетевой профиль по умолчанию",
+        "tags": ["prod"],
+        "active_profiles": []
+      },
+      "profiles": [
+        {
+          "profile_id": "network:default",
+          "concurrency": 24,
+          "session": {
+            "base_url": null,
+            "connect_timeout_s": 5.0,
+            "read_timeout_s": 10.0,
+            "write_timeout_s": 10.0,
+            "request_timeout_s": null,
+            "max_connections": 64,
+            "max_keepalive_connections": 20,
+            "http2": true,
+            "default_headers": {
+              "User-Agent": "Mozilla/5.0 (compatible; ParserBot/1.0)",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Encoding": "gzip, deflate, br",
+              "Accept-Language": "ru-RU,ru;q=0.9",
+              "Cache-Control": "no-cache"
+            },
+            "verify_tls": true,
+            "ca_path": null
+          },
+          "retry_policy": {
+            "max_attempts": 3,
+            "initial_delay_s": 0.3,
+            "backoff_multiplier": 2.0,
+            "max_delay_s": 10.0,
+            "timeout_budget_s": 30.0,
+            "retry_non_idempotent": false,
+            "retry_on_status": ["5xx", 429],
+            "retry_on_exceptions_category": ["timeout", "network", "connection"]
+          },
+          "rate_limit": {
+            "enabled": true,
+            "requests_per_second": 10,
+            "burst_size": 20,
+            "jitter_s": 0.5
+          }
+        }
+      ]
+    }
+  ]
+}

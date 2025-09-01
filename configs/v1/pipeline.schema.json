@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:auth-parser:config:v1:pipeline",
+  "title": "Pipeline Config (v1)",
+  "description": "Параметры оркестрации пайплайна. Единая форма: meta + profiles[].",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "profiles"],
+  "properties": {
+    "meta": {
+      "$ref": "./meta.schema.json",
+      "description": "Общие метаданные профиля (pipeline_step, config_id, version, active_profiles)."
+    },
+    "profiles": {
+      "type": "array",
+      "description": "Набор профилей. Если meta.active_profiles пуст — используется первый профиль.",
+      "default": [],
+      "items": {
+        "type": "object",
+        "title": "PipelineProfile",
+        "description": "Профиль настроек пайплайна.",
+        "additionalProperties": false,
+        "required": ["profile_id", "batch_size"],
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "description": "Уникальный ID профиля для трассировки.",
+            "minLength": 1
+          },
+          "batch_size": {
+            "type": "integer",
+            "description": "Размер логической партии URL на итерацию пайплайна (≥1).",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "meta": {
+        "pipeline_step": "pipeline",
+        "config_id": "pipeline:default",
+        "version": "1.0.0",
+        "description": "Параметры батчей/конкурентности",
+        "tags": ["default"],
+        "active_profiles": []
+      },
+      "profiles": [
+        {
+          "profile_id": "pipeline:default",
+          "batch_size": 10
+        }
+      ]
+    }
+  ]
+}

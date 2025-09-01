@@ -1,0 +1,249 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "urn:auth-parser:config:v1:site",
+    "title": "Site Config (v1)",
+    "description": "Декларативные правила извлечения и нормализации данных со страниц сайта. Унифицированная форма: { meta, profiles[] }.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "meta",
+        "profiles"
+    ],
+    "properties": {
+        "meta": {
+            "$ref": "./meta.schema.json",
+            "description": "Общие метаданные профиля (pipeline_step, config_id, version и пр.)."
+        },
+        "profiles": {
+            "type": "array",
+            "description": "Набор профилей сайта. Активный выбирается через meta.active_profiles; если пусто — используется первый.",
+            "items": {
+                "$ref": "#/$defs/site_profile"
+            },
+            "default": []
+        }
+    },
+    "$defs": {
+        "site_profile": {
+            "title": "SiteProfile",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "profile_id",
+                "page_container_selector",
+                "item_containers"
+            ],
+            "properties": {
+                "profile_id": {
+                    "type": "string",
+                    "description": "Уникальный ID профиля для трассировки.",
+                    "minLength": 1
+                },
+                "page_container_selector": {
+                    "type": "string",
+                    "description": "CSS-селектор корневого контейнера страницы; ограничивает область поиска.",
+                    "minLength": 1
+                },
+                "item_containers": {
+                    "type": "array",
+                    "description": "Список деклараций контейнеров элементов (карточки, строки таблиц и т.д.).",
+                    "items": {
+                        "$ref": "#/$defs/item_container"
+                    },
+                    "default": []
+                }
+            }
+        },
+        "item_container": {
+            "title": "ItemContainer",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "container_id",
+                "item_selectors",
+                "fields"
+            ],
+            "properties": {
+                "container_id": {
+                    "type": "string",
+                    "description": "Уникальный ID контейнера в рамках профиля.",
+                    "minLength": 1
+                },
+                "item_selectors": {
+                    "type": "array",
+                    "description": "Один или несколько CSS-селекторов, определяющих карточку/строку. Порядок важен.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": []
+                },
+                "fields": {
+                    "type": "array",
+                    "description": "Список полей, извлекаемых из элемента.",
+                    "items": {
+                        "$ref": "#/$defs/field_spec"
+                    },
+                    "default": []
+                }
+            }
+        },
+        "field_spec": {
+            "title": "FieldSpec",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "name",
+                "value_selectors"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Имя поля (уникально в рамках контейнера).",
+                    "minLength": 1
+                },
+                "is_unique": {
+                    "type": "boolean",
+                    "description": "Участвует ли поле в построении ключа уникальности.",
+                    "default": false
+                },
+                "missing_as_error": {
+                    "type": "boolean",
+                    "description": "Если true и поле не извлечено — фиксируется ошибка.",
+                    "default": true
+                },
+                "value_selectors": {
+                    "type": "array",
+                    "description": "Стратегии извлечения значения; выполняются по порядку до первого успеха.",
+                    "items": {
+                        "$ref": "#/$defs/value_selector"
+                    },
+                    "default": []
+                },
+                "normalize_pipeline": {
+                    "type": "array",
+                    "description": "Последовательность инструментов нормализации.",
+                    "items": {
+                        "$ref": "#/$defs/normalize_step"
+                    },
+                    "default": []
+                }
+            }
+        },
+        "value_selector": {
+            "title": "ValueSelector",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "selector",
+                "extract"
+            ],
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS-селектор внутри элемента (item_selector) для поиска значения.",
+                    "minLength": 1
+                },
+                "extract": {
+                    "type": "string",
+                    "description": "Способ извлечения значения.",
+                    "enum": [
+                        "text",
+                        "attr"
+                    ]
+                },
+                "attr": {
+                    "type": "string",
+                    "description": "Имя атрибута (нужно, когда extract = \"attr\"). Оставлено опциональным — проверяется в ConfigLoader.",
+                    "minLength": 1
+                }
+            }
+        },
+        "normalize_step": {
+            "title": "NormalizeStep",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "tool"
+            ],
+            "properties": {
+                "tool": {
+                    "type": "string",
+                    "description": "Имя инструмента нормализации (должно существовать в TOOL_REGISTRY).",
+                    "minLength": 1
+                },
+                "params": {
+                    "type": "object",
+                    "description": "Параметры шага; произвольные ключи для конкретного инструмента.",
+                    "additionalProperties": true,
+                    "default": {}
+                }
+            }
+        }
+    },
+    "examples": [
+        {
+            "meta": {
+                "pipeline_step": "site",
+                "config_id": "site:cnc_demo",
+                "version": "1.1.0",
+                "description": "Демо конфиг для сайта",
+                "tags": [
+                    "demo"
+                ],
+                "active_profiles": []
+            },
+            "profiles": [
+                {
+                    "profile_id": "site:cnc_demo",
+                    "page_container_selector": "div.inner_wrapper",
+                    "item_containers": [
+                        {
+                            "container_id": "cards",
+                            "item_selectors": [
+                                "div.catalog_item",
+                                "li.product-card"
+                            ],
+                            "fields": [
+                                {
+                                    "name": "Товар",
+                                    "value_selectors": [
+                                        {
+                                            "selector": ".item-title a",
+                                            "extract": "text"
+                                        },
+                                        {
+                                            "selector": ".card-name",
+                                            "extract": "text"
+                                        }
+                                    ],
+                                    "normalize_pipeline": [
+                                        {
+                                            "tool": "clean_text"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "name": "Артикул",
+                                    "is_unique": true,
+                                    "value_selectors": [
+                                        {
+                                            "selector": ".article",
+                                            "extract": "text"
+                                        },
+                                        {
+                                            "selector": "[data-sku]",
+                                            "extract": "attr",
+                                            "attr": "data-sku"
+                                        }
+                                    ],
+                                    "normalize_pipeline": []
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "$comment": "Условные зависимости (например, обязательность 'attr' при extract='attr'), уникальность ID и минимальные размеры массивов — проверяются в ConfigLoader (fail-fast), чтобы сохранить дружелюбность к генерации dataclass DTO.⚠️ Логическая зависимость: поле 'attr' должно быть обязательным, если extract='attr'. Эта проверка выполняется в ConfigLoader. ⚠️ Уникальность: profile_id в профиле, container_id в контейнерах и field.name в полях должны быть уникальными. Это проверяет ConfigLoader. ⚠️ Минимальные размеры: item_containers и fields должны содержать хотя бы один элемент. В схеме разрешены пустые массивы (default: []), но ConfigLoader выполняет fail-fast проверку."
+}
