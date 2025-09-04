@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:auth-parser:defs:v1:meta",
-  "title": "Config Meta (v1)",
+  "title": "Meta",
   "description": "Общие метаданные профилей конфигурации. Единый формат для всех типов профилей. Выбор активных профилей осуществляется через meta.active_profiles.",
   "type": "object",
   "additionalProperties": false,
