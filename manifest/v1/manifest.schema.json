@@ -1,7 +1,7 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "urn:auth-parser:manifest:v1",
-    "title": "ConfigManifest v1",
+    "$id": "manifest.schema.json",
+    "title": "Config Manifest v1",
     "description": "JSON Schema для манифеста конфигураций. Источник правды для списка профилей и их местоположения. Используется в ConfigLoader до нормализации/DTO.",
     "type": "object",
     "additionalProperties": false,

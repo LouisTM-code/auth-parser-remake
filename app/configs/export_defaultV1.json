@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "pipeline_step": "export",
+    "config_id": "export:xlsx-default",
+    "version": "1.0.0",
+    "description": "Экспорт XLSX по умолчанию",
+    "tags": ["xlsx", "default"],
+    "active_profiles": []
+  },
+  "profiles": [
+    {
+      "profile_id": "export:xlsx-default",
+      "filename_pattern": "results_{site}_{date}_{time}.xlsx",
+      "sheet_name_max_len": 31,
+      "sheet_name_core_limit": 28,
+      "multiple_sheets": true,
+      "sheet_styles": {
+        "header": {
+          "bold": true,
+          "align": "center",
+          "valign": "vcenter",
+          "bg_color": "#F2F2F2",
+          "font_color": "#000000",
+          "border": 1,
+          "text_wrap": true
+        },
+        "cell": {
+          "align": "left",
+          "valign": "top",
+          "border": 1,
+          "text_wrap": false
+        },
+        "freeze_header": true,
+        "autowidth": true
+      },
+      "empty_sheet_name": "Empty"
+    }
+  ]
+}

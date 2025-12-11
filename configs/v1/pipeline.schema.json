@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:auth-parser:config:v1:pipeline",
+  "$id": "pipeline.schema.json",
   "title": "Pipeline Config (v1)",
   "description": "Параметры оркестрации пайплайна. Единая форма: meta + profiles[].",
   "type": "object",

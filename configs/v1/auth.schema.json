@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:auth-parser:config:v1:auth",
+  "$id": "auth.schema.json",
   "title": "Auth Config (v1-min)",
   "description": "meta + profiles[]. В v1 поддерживаются ветки form и api_token. Выбор профилей через meta.active_profiles.",
   "type": "object",
@@ -15,7 +15,7 @@
       "type": "array",
       "description": "Если meta.active_profiles пуст — используется первый элемент.",
       "default": [],
-      "items": { "$ref": "#/$defs/profile" }
+      "items": { "$ref": "auth.schema.json#/$defs/profile" }
     }
   },
 
@@ -40,10 +40,18 @@
         },
 
         "form_fields": {
-          "type": ["object", "null"],
-          "description": "Ключи формы для form. Значения допускают ${env:...}/${secret:...}.",
+          "type": ["array", "null"],
+          "description": "Массив полей формы для form. Каждый объект содержит name и value.",
           "default": null,
-          "additionalProperties": { "type": "string" }
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "value": { "type": "string" }
+            },
+            "required": ["name", "value"],
+            "additionalProperties": false
+          }
         },
 
         "csrf": {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:auth-parser:config:v1:network",
+  "$id": "network.schema.json",
   "title": "Network Config (v1)",
   "description": "Сетевой профиль: HTTP-сессия, политика ретраев и ограничение скорости. Единственный формат для всех файлов v1: meta + profiles[].",
   "type": "object",
@@ -15,7 +15,7 @@
       "type": "array",
       "description": "Список профилей. Выбор активных — через meta.active_profiles. Пусто → используется первый профиль.",
       "default": [],
-      "items": { "$ref": "#/$defs/network_profile" }
+      "items": { "$ref": "network.schema.json#/$defs/network_profile" }
     }
   },
 

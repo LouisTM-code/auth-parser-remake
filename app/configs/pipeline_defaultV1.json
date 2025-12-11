@@ -1,0 +1,16 @@
+{
+  "meta": {
+    "pipeline_step": "pipeline",
+    "config_id": "pipeline:default",
+    "version": "1.0.0",
+    "description": "Параметры батчей/конкурентности",
+    "tags": ["default"],
+    "active_profiles": []
+  },
+  "profiles": [
+    {
+      "profile_id": "pipeline:default",
+      "batch_size": 10
+    }
+  ]
+}

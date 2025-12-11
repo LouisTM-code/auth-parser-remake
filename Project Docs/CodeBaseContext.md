@@ -5,13 +5,23 @@
 > Формат: ASCII tree с комментариями назначения. Исключены временные, кеш и сборочные файлы. Директория app и файлы requirements.txt, main.py - лежат в общей корневой директории.
 
 ```Project
-app/
+app/                # Директория исполняемого приложения
   ├── app_logging/     # Модули логирования
   │   └── logbus.py    # Неблокирующая шина логов для UI
   ├── core/                      # Модули конфигураций и настроек
   │   ├── errors.py              # Коды и исключения верхнего уровня для конвейера парсинга
   │   ├── models_and_specs.py    # Модели (DTO) и спецификации полей парсинга
   │   └── utils_text.py          # Текстовые и URL-утилиты
+  ├── dto/                   # Модули описания структур данных (DTO-модули)
+  │   ├── auth_dto.py        # DTO применяемые в `auth.py`
+  │   ├── export_dto.py      # DTO применяемые в `writer.py`
+  │   ├── logging_dto.py     # DTO применяемые в `logbus.py` и UI
+  │   ├── manifest_dto.py    # DTO применяемые в `ConfigLoader` (Модуль ещё не реализован)
+  │   ├── meta_dto.py        # DTO описывающий универсальную секцию `meta` в каждом json конфиге
+  │   ├── network_dto.py     # DTO применяемые в модуле `session_and_fetcher.py`
+  │   ├── pipeline_dto.py    # DTO применяемые в модуле `PipelineLauncher` (Модуль ещё не реализован)
+  │   ├── site_dto.py        # DTO применяемые в модуле `extractor.py` и `normalizer.py`
+  │   └── url_dto.py         # DTO применяемые в модуле `UrlTransformer` (Модуль ещё не реализован)
   ├── export_io/       # Модули сохранения/экспорта данных
   │   └── writer.py    # Экспорт результатов парсинга в XLSX
   ├── net/                          # Модули и адаптеры сети
@@ -26,6 +36,12 @@ app/
   │   ├── interface.py          # минималистичный интерфейс и управление пайплайном
   │   └── state.py        # `UIState` — централизованное состояние интерфейса Streamlit
   └── test/    # Тесты (unit, integration)
+configs/v1/                   # JsonSchema для каждого v1 конфига формата *.schema.json - (1 *.schema.json = 1 *_dto.py)
+         ├── auth.schema.json
+         ├── meta.schema.json
+         └── ...
+manifest/v1/                        # JsonSchema для v1 манифеста формата *.schema.json
+         └── manifest.schema.json   # Схема, описывающая импорт конфигов в `ConfigLoader` на уровне `PipelineLauncher`
 requirements.txt   # Python requirements
 main.py            # Production entrypoint для Streamlit Cloud
 ```
@@ -274,6 +290,8 @@ app.ui.state:
 ---
 
 ## 3. Ключевые структуры данных (Python с комментариями)
+
+> Представленные далее DTO хардкод. И отражают текущее структуры данных в существующем коде. Если иначе - указано ниже в [### История обновления логикой внешнего конфигурирования]
 
 ```python
 @dataclass(slots=True, frozen=True)
@@ -568,3 +586,7 @@ class UIState:
     started_at: float = 0.0
     finished_at: float = 0.0
 ```
+
+### История обновления логикой внешнего конфигурирования:
+
+* Обновления ещё не применялись.

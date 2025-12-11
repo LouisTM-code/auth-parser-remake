@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "urn:auth-parser:config:v1:site",
+    "$id": "site.schema.json",
     "title": "Site Config (v1)",
     "description": "Декларативные правила извлечения и нормализации данных со страниц сайта. Унифицированная форма: { meta, profiles[] }.",
     "type": "object",
@@ -18,7 +18,7 @@
             "type": "array",
             "description": "Набор профилей сайта. Активный выбирается через meta.active_profiles; если пусто — используется первый.",
             "items": {
-                "$ref": "#/$defs/site_profile"
+                "$ref": "site.schema.json#/$defs/site_profile"
             },
             "default": []
         }

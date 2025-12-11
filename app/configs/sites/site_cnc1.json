@@ -1,0 +1,63 @@
+{
+    "meta": {
+        "pipeline_step": "site",
+        "config_id": "site:cnc1",
+        "version": "1.1.0",
+        "description": "Демо конфиг для сайта",
+        "tags": [
+            "demo"
+        ],
+        "active_profiles": []
+    },
+    "profiles": [
+        {
+            "profile_id": "site:cnc_demo",
+            "page_container_selector": "div.inner_wrapper",
+            "item_containers": [
+                {
+                    "container_id": "cards",
+                    "item_selectors": [
+                        "div.catalog_item",
+                        "li.product-card"
+                    ],
+                    "fields": [
+                        {
+                            "name": "Товар",
+                            "value_selectors": [
+                                {
+                                    "selector": ".item-title a",
+                                    "extract": "text"
+                                },
+                                {
+                                    "selector": ".card-name",
+                                    "extract": "text"
+                                }
+                            ],
+                            "normalize_pipeline": [
+                                {
+                                    "tool": "clean_text"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Артикул",
+                            "is_unique": true,
+                            "value_selectors": [
+                                {
+                                    "selector": ".article",
+                                    "extract": "text"
+                                },
+                                {
+                                    "selector": "[data-sku]",
+                                    "extract": "attr",
+                                    "attr": "data-sku"
+                                }
+                            ],
+                            "normalize_pipeline": []
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

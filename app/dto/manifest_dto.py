@@ -38,6 +38,6 @@ class ManifestMeta:
     tags: Optional[List[str]] = field(default_factory=lambda: [])
 
 @dataclass
-class ConfigmanifestV1:
+class ConfigManifestV1:
     manifest_meta: ManifestMeta
     configs: List[ConfigEntry]

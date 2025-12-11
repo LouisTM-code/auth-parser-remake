@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:auth-parser:config:v1:url",
+  "$id": "url.schema.json",
   "title": "URL Config (v1)",
   "description": "Правила детерминированной трансформации URL до сетевого запроса. Единая форма: meta + profiles[]. Выбор активных профилей — через meta.active_profiles.",
   "type": "object",
@@ -14,7 +14,7 @@
     "profiles": {
       "type": "array",
       "description": "Список профилей URL-трансформаций. Если meta.active_profiles пуст — используется первый профиль.",
-      "items": { "$ref": "#/$defs/url_profile" },
+      "items": { "$ref": "url.schema.json#/$defs/url_profile" },
       "default": []
     }
   },

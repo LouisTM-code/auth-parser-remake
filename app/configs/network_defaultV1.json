@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "pipeline_step": "network",
+    "config_id": "network:default",
+    "version": "1.0.0",
+    "description": "Сетевой профиль по умолчанию",
+    "tags": ["prod"],
+    "active_profiles": []
+  },
+  "profiles": [
+    {
+      "profile_id": "network:default",
+      "concurrency": 24,
+      "session": {
+        "base_url": null,
+        "connect_timeout_s": 5.0,
+        "read_timeout_s": 10.0,
+        "write_timeout_s": 10.0,
+        "request_timeout_s": null,
+        "max_connections": 64,
+        "max_keepalive_connections": 20,
+        "http2": true,
+        "default_headers": {
+          "User-Agent": "Mozilla/5.0 (compatible; ParserBot/1.0)",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Accept-Language": "ru-RU,ru;q=0.9",
+          "Cache-Control": "no-cache"
+        },
+        "verify_tls": true,
+        "ca_path": null
+      },
+      "retry_policy": {
+        "max_attempts": 3,
+        "initial_delay_s": 0.3,
+        "backoff_multiplier": 2.0,
+        "max_delay_s": 10.0,
+        "timeout_budget_s": 30.0,
+        "retry_non_idempotent": false,
+        "retry_on_status": ["5xx", 429],
+        "retry_on_exceptions_category": ["timeout", "network", "connection"]
+      },
+      "rate_limit": {
+        "enabled": true,
+        "requests_per_second": 10,
+        "burst_size": 20,
+        "jitter_s": 0.5
+      }
+    }
+  ]
+}

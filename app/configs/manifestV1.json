@@ -1,0 +1,53 @@
+{
+  "manifest_meta": {
+    "manifest_id": "manifest:dev-default",
+    "version": "1.0.0",
+    "created_at": "2025-09-19T12:00:00Z",
+    "description": "Dev Манифест для ConfigLoader",
+    "tags": ["dev", "ci"]
+  },
+  "configs": [
+    {
+      "type": "pipeline",
+      "config_id": "pipeline:default",
+      "path": "app/configs/pipeline_defaultV1.json",
+      "expected_version": "1.0.0"
+    },
+    {
+      "type": "site",
+      "config_id": "site:cnc1",
+      "path": "app/configs/sites/site_cnc1.json",
+      "expected_version": "1.x"
+    },
+    {
+      "type": "url",
+      "config_id": "url:cnc1",
+      "path": "app/configs/urls/url_cnc1.json",
+      "expected_version": "1.0.0"
+    },
+    {
+      "type": "network",
+      "config_id": "network:default",
+      "path": "app/configs/network_defaultV1.json",
+      "expected_version": "1.0.0"
+    },
+    {
+      "type": "auth",
+      "config_id": "auth:cnc1",
+      "path": "app/configs/auth/auth_cnc1.json",
+      "expected_version": "1.0.0"
+    },
+    {
+      "type": "logging",
+      "config_id": "logging:default",
+      "path": "app/configs/logging_defaultV1.json",
+      "expected_version": "1.0.0"
+    },
+    {
+      "type": "export",
+      "config_id": "export:xlsx-default",
+      "path": "app/configs/export_defaultV1.json",
+      "expected_version": "1.0.0"
+    }
+  ]
+}

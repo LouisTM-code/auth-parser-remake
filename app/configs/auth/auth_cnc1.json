@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "pipeline_step": "auth",
+    "config_id": "auth:cnc1",
+    "version": "1.0.0",
+    "description": "Демо профиль авторизации",
+    "tags": ["demo", "auth"],
+    "active_profiles": ["auth:demo:form", "auth:demo:token"]
+  },
+  "profiles": [
+    {
+      "profile_id": "auth:demo:form",
+      "auth_type": "form",
+      "request": {
+        "method": "POST",
+        "endpoint": "https://example.com/auth/login",
+        "headers": { "Content-Type": "application/x-www-form-urlencoded" }
+      },
+      "form_fields": [
+        { "name": "USER_LOGIN", "value": "${env:AUTH_EMAIL}" },
+        { "name": "USER_PASSWORD", "value": "${env:AUTH_PASSWORD}" }
+      ],
+      "csrf": { "enabled": true, "source_url": "https://example.com/login", "token_selector": "input[name='sessid']", "token_field_name": "sessid" },
+      "success_checks": [
+        { "check_type": "status_code", "params": { "allowed": [200, 302] } },
+        { "check_type": "header_present", "params": { "key": "Set-Cookie" } },
+        { "check_type": "body_not_contains", "params": { "patterns": ["ошибка"] } }
+      ]
+    },
+    {
+      "profile_id": "auth:demo:token",
+      "auth_type": "api_token",
+      "api_token": { "enabled": true, "token_header": "Authorization", "token_value": "${env:API_TOKEN}" }
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "pipeline_step": "url",
+    "config_id": "url:cnc1",
+    "version": "1.0.0",
+    "description": "Демонстрационный профиль URL-трансформации",
+    "tags": ["demo"],
+    "active_profiles": ["profile:prod", "profile:test"]
+  },
+  "profiles": [
+    {
+      "profile_id": "profile:prod",
+      "rules": [
+        {
+          "condition": { "host": "cnc1.ru", "path_regex": "^/catalog/.+" },
+          "action": "add_params",
+          "params": [
+            { "key": "SHOWALL_1", "value": "1", "overwrite": true },
+            { "key": "SHOWALL_3", "value": "1", "overwrite": true }
+          ],
+          "priority": 10
+        },
+        {
+          "condition": { "host": "cnc1.ru", "has_param": "page" },
+          "action": "remove_params",
+          "params": [
+            { "key": "page" },
+            { "key": "utm_source" }
+          ],
+          "priority": 20
+        },
+        {
+          "condition": { "host": "cnc1.ru" },
+          "action": "normalize_slash",
+          "params": { "mode": "ensure" },
+          "priority": 30
+        }
+      ]
+    },
+    {
+      "profile_id": "profile:test",
+      "rules": [
+        {
+          "condition": { "host": "test.cnc1.ru" },
+          "action": "replace_host",
+          "params": { "new_host": "staging.cnc1.ru" },
+          "priority": 5
+        },
+        {
+          "condition": { "path_regex": "^/search/" },
+          "action": "strip_fragment",
+          "params": {},
+          "priority": 15
+        }
+      ]
+    }
+  ]
+}

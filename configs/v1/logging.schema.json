@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:auth-parser:config:v1:logging",
+  "$id": "logging.schema.json",
   "title": "Logging Config (v1)",
   "description": "Схема профиля логирования: LogBus, UI-параметры и политика событий. Универсальная форма: meta + profiles[]. Выбор активных профилей выполняется через meta.active_profiles.",
   "type": "object",
@@ -14,7 +14,7 @@
     "profiles": {
       "type": "array",
       "description": "Набор вариантов профиля логирования.",
-      "items": { "$ref": "#/$defs/logging_profile" },
+      "items": { "$ref": "logging.schema.json#/$defs/logging_profile" },
       "default": []
     }
   },

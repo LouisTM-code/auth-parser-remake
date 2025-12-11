@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:auth-parser:config:v1:export",
+  "$id": "export.schema.json",
   "title": "Export Config (v1)",
   "description": "Параметры экспорта результатов (XLSX). Единый формат: meta + profiles[]. Выбор активных профилей — через meta.active_profiles. many_id не используется.",
   "type": "object",
@@ -14,7 +14,7 @@
     "profiles": {
       "type": "array",
       "description": "Список профилей экспорта. Если meta.active_profiles пуст — используется первый профиль.",
-      "items": { "$ref": "#/$defs/export_profile" },
+      "items": { "$ref": "export.schema.json#/$defs/export_profile" },
       "default": []
     }
   },
