@@ -242,38 +242,54 @@ class PageFetcher:
         - URL автоматически дополняются SHOWALL_1=1 и SHOWALL_3=1.
         - Дедупликацию лучше делать заранее (см. core.utils_text.normalize_and_dedupe_urls),
           но fetcher всё равно нормализует query для идемпотентности.
+        - fetch_many(..., add_showall_params=False) для карточек товара.
     """
 
     def __init__(self, session: SessionManager, *, concurrency: int = 24) -> None:
         self._session = session
         self._sem = asyncio.Semaphore(max(1, concurrency))
 
-    async def _fetch_one(self, url: str) -> FetchedPage:
-        # Гарантируем SHOWALL_* параметры
-        url_with_showall = add_showall_params(url)
+    async def _fetch_one(self, url: str, *, add_showall_params_flag: bool) -> FetchedPage:
+        # Для листинга: гарантируем SHOWALL_* параметры.
+        # Для карточек: add_showall_params_flag=False => URL не изменяем.
+        requested_url = add_showall_params(url) if add_showall_params_flag else url
 
         async with self._sem:
             try:
-                resp = await self._session.get(url_with_showall)
-                # Только статус 200 считаем успешным; текст берём целиком
+                resp = await self._session.get(requested_url)
                 return FetchedPage(
-                    url=url_with_showall,
+                    url=requested_url,
                     status=resp.status_code,
                     text=resp.text if resp.status_code == 200 else None,
-                    error=None if resp.status_code == 200 else HttpStatusError(resp.status_code, url_with_showall),
+                    error=None if resp.status_code == 200 else HttpStatusError(resp.status_code, requested_url),
                 )
-            except Exception as e:  # сетевые/таймауты и пр. — собираем, не роняем батч
-                return FetchedPage(url=url_with_showall, status=None, text=None, error=e)
+            except Exception as e:
+                return FetchedPage(url=requested_url, status=None, text=None, error=e)
 
-    async def fetch_many(self, urls: Iterable[str]) -> list[FetchedPage]:
+    async def fetch_many(
+        self,
+        urls: Iterable[str],
+        *,
+        add_showall_params: bool = True,
+    ) -> list[FetchedPage]:
         """
         Загружает набор URL конкурентно.
 
-        Возвращает список FetchedPage в порядке завершения задач (не гарантируется
-        исходный порядок). Стабильность порядка не критична для последующего парсинга.
+        Args:
+            urls: набор URL.
+            add_showall_params: добавлять ли SHOWALL_* параметры (по умолчанию True для листинга).
+
+        Returns:
+            Список FetchedPage в порядке завершения задач.
         """
-        tasks = [asyncio.create_task(self._fetch_one(u)) for u in urls]
+        tasks = [
+            asyncio.create_task(self._fetch_one(u, add_showall_params_flag=add_showall_params))
+            for u in urls
+        ]
         results: list[FetchedPage] = []
         for t in asyncio.as_completed(tasks):
             results.append(await t)
         return results
+
+
+__all__ = ["SessionConfig", "SessionManager", "FetchedPage", "PageFetcher"]
