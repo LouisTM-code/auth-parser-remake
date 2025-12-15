@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from collections import OrderedDict
 from typing import Iterable, Literal
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse, urljoin
 
 from app.core.models_and_specs import NA
 
@@ -125,3 +125,30 @@ def normalize_and_dedupe_urls(lines: Iterable[str]) -> list[str]:
         seen.add(norm)
         out.append(norm)
     return out
+
+def resolve_url(base_url: str, href: str) -> str:
+    """
+    (NEW) Приводит ссылку href к абсолютному URL относительно base_url.
+
+    Использование:
+    - В листинге карточки товаров часто содержат относительные ссылки.
+    - Для сетевого слоя удобнее работать с абсолютными URL.
+
+    Args:
+        base_url: URL страницы-источника (листинга), относительно которой нужно резолвить.
+        href: значение из атрибута href (может быть относительным).
+
+    Returns:
+        Абсолютный URL. Если href пустой — вернёт пустую строку.
+    """
+    if not href:
+        return ""
+    return urljoin(base_url, href)
+
+__all__ = [
+    "clean_text",
+    "normalize_price_to_float_or_na",
+    "add_showall_params",
+    "normalize_and_dedupe_urls",
+    "resolve_url",
+]
