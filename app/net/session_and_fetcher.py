@@ -378,6 +378,7 @@ class PageFetcher:
         self._window_pause_s = max(0.0, window_pause_s)
         self._window_lock = asyncio.Lock()
         self._window_timestamps: deque[float] = deque()
+        self._window_next_allowed: float = 0.0
         self._log = log_bus
 
     async def _fetch_one(self, url: str, *, add_showall_params_flag: bool) -> FetchedPage:
@@ -388,30 +389,41 @@ class PageFetcher:
         async with self._sem:
             if self._window_limit > 0 and self._window_seconds > 0:
                 while True:
+                    wait_s = 0.0
                     async with self._window_lock:
                         now = time.monotonic()
-                        while self._window_timestamps and now - self._window_timestamps[0] > self._window_seconds:
-                            self._window_timestamps.popleft()
-                        if len(self._window_timestamps) < self._window_limit:
-                            self._window_timestamps.append(now)
-                            break
-                        pause_s = self._window_pause_s
-                        if pause_s <= 0:
-                            oldest = self._window_timestamps[0]
-                            pause_s = max(0.0, self._window_seconds - (now - oldest))
-                    if pause_s > 0:
+                        if now < self._window_next_allowed:
+                            wait_s = self._window_next_allowed - now
+                        else:
+                            while self._window_timestamps and now - self._window_timestamps[0] > self._window_seconds:
+                                self._window_timestamps.popleft()
+                            if len(self._window_timestamps) < self._window_limit:
+                                self._window_timestamps.append(now)
+                                break
+                            pause_s = self._window_pause_s
+                            if pause_s <= 0:
+                                oldest = self._window_timestamps[0]
+                                pause_s = max(0.0, self._window_seconds - (now - oldest))
+                            if pause_s > 0:
+                                jitter = random.uniform(0.0, min(0.25, pause_s * 0.2))
+                                wait_s = pause_s + jitter
+                                self._window_next_allowed = max(self._window_next_allowed, now + wait_s)
+                            else:
+                                self._window_next_allowed = max(self._window_next_allowed, now)
+                    if wait_s > 0:
                         if self._log:
                             self._log.warn(
                                 "FETCH_WINDOW_PAUSE",
-                                f"Window limit hit; pausing {pause_s:.3f}s before GET: {requested_url}",
+                                f"Window limit hit; pausing {wait_s:.3f}s before GET: {requested_url}",
                                 context={
                                     "url": requested_url,
                                     "limit": self._window_limit,
                                     "window_seconds": self._window_seconds,
-                                    "pause_s": round(pause_s, 3),
+                                    "pause_s": round(wait_s, 3),
+                                    "next_allowed_ts": round(self._window_next_allowed, 3),
                                 },
                             )
-                        await asyncio.sleep(pause_s)
+                        await asyncio.sleep(wait_s)
                     else:
                         await asyncio.sleep(0)
             delay_s = 0.0
