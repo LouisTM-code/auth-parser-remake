@@ -92,24 +92,11 @@ class SessionManager:
 
         self._cfg = cfg
         self._log = log_bus
-        self._client = httpx.AsyncClient(
-            base_url=self._cfg.base_url,
-            http2=self._cfg.http2,
-            headers=self._default_headers,  # используем уже гарантированно dict[str, str]
-            timeout=httpx.Timeout(
-                connect=self._cfg.connect_timeout_s,
-                read=self._cfg.read_timeout_s,
-                write=self._cfg.read_timeout_s,
-                pool=self._cfg.connect_timeout_s,
-            ),
-            limits=httpx.Limits(
-                max_connections=self._cfg.max_connections,
-                max_keepalive_connections=self._cfg.max_keepalive_connections,
-            ),
-            cookies=httpx.Cookies(),
-            follow_redirects=True,
-            verify=True,
-        )
+        self._http2_enabled = self._cfg.http2
+        self._protocol_error_count = 0
+        self._protocol_error_counts_by_url: dict[str, int] = {}
+        self._protocol_error_threshold = 2
+        self._client = self._build_client(http2=self._http2_enabled)
         self._is_authenticated: bool = False
 
     # --------- свойства/служебные ---------
@@ -126,6 +113,32 @@ class SessionManager:
     def is_authenticated(self) -> bool:
         """Возвращает True, если адаптер авторизации отметил сессию как успешную."""
         return self._is_authenticated
+
+    def _build_client(self, *, http2: bool) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            base_url=self._cfg.base_url,
+            http2=http2,
+            headers=self._default_headers,  # используем уже гарантированно dict[str, str]
+            timeout=httpx.Timeout(
+                connect=self._cfg.connect_timeout_s,
+                read=self._cfg.read_timeout_s,
+                write=self._cfg.read_timeout_s,
+                pool=self._cfg.connect_timeout_s,
+            ),
+            limits=httpx.Limits(
+                max_connections=self._cfg.max_connections,
+                max_keepalive_connections=self._cfg.max_keepalive_connections,
+            ),
+            cookies=httpx.Cookies(),
+            follow_redirects=True,
+            verify=True,
+        )
+
+    async def reset_client(self, *, http2: bool) -> None:
+        """Пересоздаёт клиент с указанным флагом HTTP/2."""
+        await self._client.aclose()
+        self._client = self._build_client(http2=http2)
+        self._http2_enabled = http2
 
     # --------- сетевые операции ---------
 
@@ -156,6 +169,8 @@ class SessionManager:
             try:
                 resp = await self._client.get(url, headers=headers)
                 if acceptable_statuses and resp.status_code in acceptable_statuses:
+                    self._protocol_error_count = 0
+                    self._protocol_error_counts_by_url.pop(url, None)
                     return resp
                 if resp.status_code in self._cfg.retry_statuses and attempt < max_retries:
                     if self._log:
@@ -173,7 +188,50 @@ class SessionManager:
                     continue
                 if acceptable_statuses and resp.status_code not in acceptable_statuses:
                     raise HttpStatusError(resp.status_code, url)
+                self._protocol_error_count = 0
+                self._protocol_error_counts_by_url.pop(url, None)
                 return resp
+            except (httpx.RemoteProtocolError, httpx.ProtocolError) as e:
+                last_err = e
+                self._protocol_error_count += 1
+                self._protocol_error_counts_by_url[url] = self._protocol_error_counts_by_url.get(url, 0) + 1
+                should_fallback = (
+                    self._http2_enabled
+                    and (
+                        self._protocol_error_count >= self._protocol_error_threshold
+                        or self._protocol_error_counts_by_url[url] >= self._protocol_error_threshold
+                    )
+                )
+                if should_fallback:
+                    if self._log:
+                        self._log.warn(
+                            "FETCH_HTTP2_FALLBACK",
+                            f"Switching to HTTP/1.1 after protocol errors for {url}",
+                            context={
+                                "url": url,
+                                "attempt": attempt + 1,
+                                "protocol_error_count": self._protocol_error_count,
+                                "protocol_error_count_url": self._protocol_error_counts_by_url[url],
+                                "threshold": self._protocol_error_threshold,
+                            },
+                        )
+                    await self.reset_client(http2=False)
+                    self._protocol_error_count = 0
+                    self._protocol_error_counts_by_url.pop(url, None)
+                    continue
+                if attempt >= max_retries:
+                    raise NetworkError(f"GET protocol error after {attempt+1} attempts: {url}") from e
+                if self._log:
+                    self._log.warn(
+                        "FETCH_RETRY_PROTOCOL",
+                        f"Retrying GET after protocol error: {url}",
+                        context={
+                            "url": url,
+                            "error": repr(e),
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
+                    )
             except httpx.ReadTimeout as e:
                 last_err = e
                 if attempt >= max_retries:
