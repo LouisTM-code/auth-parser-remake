@@ -52,6 +52,9 @@ class PipelineConfig:
     cards_batch_size: int = 60
     request_delay_s: float = 0.0
     request_delay_jitter_s: float = 0.0
+    window_limit: int = 0
+    window_seconds: float = 0.0
+    window_pause_s: float = 0.0
 
 
 class ParserPipeline:
@@ -92,6 +95,9 @@ class ParserPipeline:
             concurrency=self._cfg.concurrency,
             request_delay_s=self._cfg.request_delay_s,
             request_delay_jitter_s=self._cfg.request_delay_jitter_s,
+            window_limit=self._cfg.window_limit,
+            window_seconds=self._cfg.window_seconds,
+            window_pause_s=self._cfg.window_pause_s,
             log_bus=self._log,
         )
 

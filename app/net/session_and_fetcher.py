@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 from dataclasses import dataclass
 from typing import Iterable, Final, Optional
 from collections.abc import Mapping
 import random
+from collections import deque
 
 import httpx
 
@@ -174,6 +176,21 @@ class SessionManager:
                 if acceptable_statuses and resp.status_code not in acceptable_statuses:
                     raise HttpStatusError(resp.status_code, url)
                 return resp
+            except httpx.RemoteProtocolError as e:
+                last_err = e
+                if attempt >= max_retries:
+                    raise NetworkError(f"GET protocol error after {attempt+1} attempts: {url}") from e
+                if self._log:
+                    self._log.warn(
+                        "FETCH_RETRY_PROTOCOL",
+                        f"Retrying GET after protocol error: {url}",
+                        context={
+                            "url": url,
+                            "error": repr(e),
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
+                    )
             except httpx.ReadTimeout as e:
                 last_err = e
                 if attempt >= max_retries:
@@ -249,6 +266,21 @@ class SessionManager:
                 if acceptable_statuses and resp.status_code not in acceptable_statuses:
                     raise HttpStatusError(resp.status_code, url)
                 return resp
+            except httpx.RemoteProtocolError as e:
+                last_err = e
+                if attempt >= max_retries:
+                    raise NetworkError(f"POST protocol error after {attempt+1} attempts: {url}") from e
+                if self._log:
+                    self._log.warn(
+                        "FETCH_RETRY_PROTOCOL",
+                        f"Retrying POST after protocol error: {url}",
+                        context={
+                            "url": url,
+                            "error": repr(e),
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
+                    )
             except httpx.ReadTimeout as e:
                 last_err = e
                 if attempt >= max_retries:
@@ -330,12 +362,20 @@ class PageFetcher:
         concurrency: int = 24,
         request_delay_s: float = 0.0,
         request_delay_jitter_s: float = 0.0,
+        window_limit: int = 0,
+        window_seconds: float = 0.0,
+        window_pause_s: float = 0.0,
         log_bus: Optional[LogBus] = None,
     ) -> None:
         self._session = session
         self._sem = asyncio.Semaphore(max(1, concurrency))
         self._request_delay_s = max(0.0, request_delay_s)
         self._request_delay_jitter_s = max(0.0, request_delay_jitter_s)
+        self._window_limit = max(0, window_limit)
+        self._window_seconds = max(0.0, window_seconds)
+        self._window_pause_s = max(0.0, window_pause_s)
+        self._window_lock = asyncio.Lock()
+        self._window_timestamps: deque[float] = deque()
         self._log = log_bus
 
     async def _fetch_one(self, url: str, *, add_showall_params_flag: bool) -> FetchedPage:
@@ -344,6 +384,34 @@ class PageFetcher:
         requested_url = add_showall_params(url) if add_showall_params_flag else url
 
         async with self._sem:
+            if self._window_limit > 0 and self._window_seconds > 0:
+                while True:
+                    async with self._window_lock:
+                        now = time.monotonic()
+                        while self._window_timestamps and now - self._window_timestamps[0] > self._window_seconds:
+                            self._window_timestamps.popleft()
+                        if len(self._window_timestamps) < self._window_limit:
+                            self._window_timestamps.append(now)
+                            break
+                        pause_s = self._window_pause_s
+                        if pause_s <= 0:
+                            oldest = self._window_timestamps[0]
+                            pause_s = max(0.0, self._window_seconds - (now - oldest))
+                    if pause_s > 0:
+                        if self._log:
+                            self._log.warn(
+                                "FETCH_WINDOW_PAUSE",
+                                f"Window limit hit; pausing {pause_s:.3f}s before GET: {requested_url}",
+                                context={
+                                    "url": requested_url,
+                                    "limit": self._window_limit,
+                                    "window_seconds": self._window_seconds,
+                                    "pause_s": round(pause_s, 3),
+                                },
+                            )
+                        await asyncio.sleep(pause_s)
+                    else:
+                        await asyncio.sleep(0)
             delay_s = 0.0
             if self._request_delay_s or self._request_delay_jitter_s:
                 delay_s = self._request_delay_s + (

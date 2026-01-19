@@ -38,6 +38,9 @@ CONCURRENCY = 24
 FETCH_TIMEOUT_S = 25.0
 REQUEST_DELAY_S = 0.0
 REQUEST_DELAY_JITTER_S = 0.0
+WINDOW_LIMIT = 0
+WINDOW_SECONDS = 0.0
+WINDOW_PAUSE_S = 0.0
 LOG_POLL_INTERVAL_MS = 500
 
 
@@ -75,6 +78,9 @@ def _start_pipeline_in_background(urls: list[str], *, mode: ParsingMode) -> None
         fetch_timeout_s=FETCH_TIMEOUT_S,
         request_delay_s=REQUEST_DELAY_S,
         request_delay_jitter_s=REQUEST_DELAY_JITTER_S,
+        window_limit=WINDOW_LIMIT,
+        window_seconds=WINDOW_SECONDS,
+        window_pause_s=WINDOW_PAUSE_S,
         parsing_mode=mode,  # NEW
     )
 
