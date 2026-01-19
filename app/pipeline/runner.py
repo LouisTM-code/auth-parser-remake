@@ -49,7 +49,7 @@ class PipelineConfig:
     fetch_timeout_s: float = 25.0
 
     parsing_mode: ParsingMode = ParsingMode.SHALLOW
-    cards_batch_size: int = 60
+    cards_batch_size: int = 20
     request_delay_s: float = 0.0
     request_delay_jitter_s: float = 0.0
 
