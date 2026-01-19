@@ -320,9 +320,29 @@ class ParserPipeline:
                 # 3) Fetch карточек (без SHOWALL_*)
                 card_data_by_url: dict[str, Optional[dict[str, Any]]] = {}
                 card_data_obj_by_url = {}
+                card_fetch_total = 0
+                card_fetch_ok = 0
+                card_fetch_err = 0
 
                 # Загружаем карточки батчами, чтобы не создавать тысячи задач разом
-                for cards_sub in self._batched(card_urls, self._cfg.cards_batch_size):
+                for cards_sub_idx, cards_sub in enumerate(
+                    self._batched(card_urls, self._cfg.cards_batch_size),
+                    start=1,
+                ):
+                    card_fetch_total += len(cards_sub)
+                    self._log.info(
+                        "CARD_FETCH_BATCH_START",
+                        (
+                            f"[EXTENDED] Card batch {batch_idx}.{cards_sub_idx}: "
+                            f"size={len(cards_sub)} listing_url={listing_page.url}"
+                        ),
+                        context={
+                            "batch": batch_idx,
+                            "cards_sub_batch": cards_sub_idx,
+                            "size": len(cards_sub),
+                            "listing_url": listing_page.url,
+                        },
+                    )
                     card_tasks: list[asyncio.Task[FetchedPage]] = [
                         asyncio.create_task(self._fetch_one_with_timeout(u, add_showall_params=False))
                         for u in cards_sub
@@ -340,11 +360,36 @@ class ParserPipeline:
                             break
 
                         if card_page.text is None:
+                            card_fetch_err += 1
+                            self._log.warn(
+                                "CARD_FETCH_ERR",
+                                (
+                                    "[EXTENDED] Card fetch failed "
+                                    f"url={card_page.url} status={card_page.status} err={card_page.error!r}"
+                                ),
+                                context={
+                                    "batch": batch_idx,
+                                    "url": card_page.url,
+                                    "status": card_page.status,
+                                    "error": repr(card_page.error),
+                                },
+                            )
                             # Карточка не загрузилась — фиксируем отсутствие данных
                             card_data_by_url[card_page.url] = None
                             # прогресс по карточке считаем выполненным
                             self._ui.inc_done(1)
                             continue
+
+                        card_fetch_ok += 1
+                        self._log.info(
+                            "CARD_FETCH_OK",
+                            f"[EXTENDED] Card fetch ok url={card_page.url}",
+                            context={
+                                "batch": batch_idx,
+                                "url": card_page.url,
+                                "status": card_page.status,
+                            },
+                        )
 
                         # 4) Парсинг карточки
                         card_data = self._card_extractor.extract(
@@ -364,6 +409,20 @@ class ParserPipeline:
                     # если stop — прекращаем загрузку оставшихся карточек
                     if self._ui.stop_requested:
                         break
+
+                    self._log.info(
+                        "CARD_FETCH_BATCH_DONE",
+                        (
+                            f"[EXTENDED] Card batch {batch_idx}.{cards_sub_idx} done: "
+                            f"ok={card_fetch_ok} err={card_fetch_err}"
+                        ),
+                        context={
+                            "batch": batch_idx,
+                            "cards_sub_batch": cards_sub_idx,
+                            "ok": card_fetch_ok,
+                            "err": card_fetch_err,
+                        },
+                    )
 
                 # 5) Агрегация результатов в плоские dict-записи
                 records: list[dict[str, Any]] = []
@@ -385,6 +444,20 @@ class ParserPipeline:
 
                 products_total += len(records)
                 ok_pages += 1
+                self._log.info(
+                    "CARD_FETCH_SUMMARY",
+                    (
+                        f"[EXTENDED] Card fetch summary for listing: "
+                        f"total={card_fetch_total} ok={card_fetch_ok} err={card_fetch_err}"
+                    ),
+                    context={
+                        "batch": batch_idx,
+                        "listing_url": listing_page.url,
+                        "total": card_fetch_total,
+                        "ok": card_fetch_ok,
+                        "err": card_fetch_err,
+                    },
+                )
 
             self._log.info(
                 "BATCH_SUMMARY",
