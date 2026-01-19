@@ -411,23 +411,26 @@ class ParserPipeline:
                         card_data_obj_by_url[card_page.url] = card_data
                         card_data_by_url[card_page.url] = card_data.values
 
-                        first_characteristic = None
-                        for key in card_data.values.keys():
-                            if key not in base_field_names:
-                                first_characteristic = key
-                                break
+                        characteristic_keys = [
+                            key for key in card_data.values.keys() if key not in base_field_names
+                        ]
+                        sku = card_data.values.get("Артикул")
+                        characteristics_count = len(characteristic_keys)
                         self._log.info(
-                            "CARD_PARSE_INDICATOR",
+                            "CARD_PARSE_DETAILS",
                             (
-                                "[EXTENDED] Card parse indicator "
+                                "[EXTENDED] Card parse details "
                                 f"url={card_page.url} product_index={url_to_index.get(card_page.url)} "
-                                f"first_characteristic={first_characteristic}"
+                                f"sku={sku} characteristics_count={characteristics_count}"
                             ),
                             context={
                                 "batch": batch_idx,
                                 "url": card_page.url,
+                                "listing_url": listing_page.url,
                                 "product_index": url_to_index.get(card_page.url),
-                                "first_characteristic": first_characteristic,
+                                "sku": sku,
+                                "characteristics_count": characteristics_count,
+                                "characteristics": characteristic_keys,
                             },
                         )
 
