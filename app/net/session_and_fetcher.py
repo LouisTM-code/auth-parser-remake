@@ -240,7 +240,9 @@ class SessionManager:
         """
         Выполняет POST с ручными ретраями на сетевые сбои/таймауты.
 
-        На неожиданный HTTP-статус — исключение HttpStatusError без ретраев.
+        Политика ретраев:
+            - Повторы на сетевые ошибки и таймауты.
+            - На HTTP-статусы не из acceptable_statuses — без ретраев, сразу HttpStatusError.
         """
         last_err: Exception | None = None
 
