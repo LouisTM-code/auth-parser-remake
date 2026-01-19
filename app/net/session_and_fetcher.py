@@ -330,46 +330,55 @@ class PageFetcher:
         concurrency: int = 24,
         request_delay_s: float = 0.0,
         request_delay_jitter_s: float = 0.0,
+        limiter: Optional[asyncio.Semaphore] = None,
         log_bus: Optional[LogBus] = None,
     ) -> None:
         self._session = session
         self._sem = asyncio.Semaphore(max(1, concurrency))
         self._request_delay_s = max(0.0, request_delay_s)
         self._request_delay_jitter_s = max(0.0, request_delay_jitter_s)
+        self._limiter = limiter
         self._log = log_bus
+
+    async def _wait_limiter(self) -> None:
+        if self._limiter is None:
+            return
+        async with self._limiter:
+            return
 
     async def _fetch_one(self, url: str, *, add_showall_params_flag: bool) -> FetchedPage:
         # Для листинга: гарантируем SHOWALL_* параметры.
         # Для карточек: add_showall_params_flag=False => URL не изменяем.
         requested_url = add_showall_params(url) if add_showall_params_flag else url
 
-        async with self._sem:
-            delay_s = 0.0
-            if self._request_delay_s or self._request_delay_jitter_s:
-                delay_s = self._request_delay_s + (
-                    random.uniform(0.0, self._request_delay_jitter_s) if self._request_delay_jitter_s else 0.0
-                )
-                if delay_s > 0:
-                    if self._log:
-                        self._log.info(
-                            "FETCH_DELAY",
-                            f"Applying request delay {delay_s:.3f}s before GET: {requested_url}",
-                            context={
-                                "url": requested_url,
-                                "delay_s": round(delay_s, 3),
-                            },
-                        )
-                    await asyncio.sleep(delay_s)
-            try:
+        await self._wait_limiter()
+        delay_s = 0.0
+        if self._request_delay_s or self._request_delay_jitter_s:
+            delay_s = self._request_delay_s + (
+                random.uniform(0.0, self._request_delay_jitter_s) if self._request_delay_jitter_s else 0.0
+            )
+            if delay_s > 0:
+                if self._log:
+                    self._log.info(
+                        "FETCH_DELAY",
+                        f"Applying request delay {delay_s:.3f}s before GET: {requested_url}",
+                        context={
+                            "url": requested_url,
+                            "delay_s": round(delay_s, 3),
+                        },
+                    )
+                await asyncio.sleep(delay_s)
+        try:
+            async with self._sem:
                 resp = await self._session.get(requested_url)
-                return FetchedPage(
-                    url=requested_url,
-                    status=resp.status_code,
-                    text=resp.text if resp.status_code == 200 else None,
-                    error=None if resp.status_code == 200 else HttpStatusError(resp.status_code, requested_url),
-                )
-            except Exception as e:
-                return FetchedPage(url=requested_url, status=None, text=None, error=e)
+            return FetchedPage(
+                url=requested_url,
+                status=resp.status_code,
+                text=resp.text if resp.status_code == 200 else None,
+                error=None if resp.status_code == 200 else HttpStatusError(resp.status_code, requested_url),
+            )
+        except Exception as e:
+            return FetchedPage(url=requested_url, status=None, text=None, error=e)
 
     async def fetch_many(
         self,
