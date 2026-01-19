@@ -22,6 +22,7 @@ from app.core.errors import (
     StopRequestedError,
     ErrorCode,
 )
+from app.core.models_and_specs import FIELD_SPECS
 from app.core.parsing_mode import ParsingMode
 from app.app_logging.logbus import LogBus
 from app.ui.state import UIState, UIStatus
@@ -313,6 +314,11 @@ class ParserPipeline:
 
                 # 2) Сбор ссылок карточек (дедуп по URL, порядок сохраняем)
                 card_urls = self._dedupe_keep_order([p.product_url for p in partials if p.product_url])
+                base_field_names = {spec.name for spec in FIELD_SPECS}
+                url_to_index: dict[str, int] = {}
+                for p in partials:
+                    if p.product_url and p.product_url not in url_to_index:
+                        url_to_index[p.product_url] = p.product_index
 
                 # Увеличиваем total прогресса на кол-во реально загружаемых карточек
                 self._ui.add_total(len(card_urls))
@@ -370,6 +376,7 @@ class ParserPipeline:
                                 context={
                                     "batch": batch_idx,
                                     "url": card_page.url,
+                                    "product_index": url_to_index.get(card_page.url),
                                     "status": card_page.status,
                                     "error": repr(card_page.error),
                                 },
@@ -387,6 +394,7 @@ class ParserPipeline:
                             context={
                                 "batch": batch_idx,
                                 "url": card_page.url,
+                                "product_index": url_to_index.get(card_page.url),
                                 "status": card_page.status,
                             },
                         )
@@ -402,6 +410,26 @@ class ParserPipeline:
 
                         card_data_obj_by_url[card_page.url] = card_data
                         card_data_by_url[card_page.url] = card_data.values
+
+                        first_characteristic = None
+                        for key in card_data.values.keys():
+                            if key not in base_field_names:
+                                first_characteristic = key
+                                break
+                        self._log.info(
+                            "CARD_PARSE_INDICATOR",
+                            (
+                                "[EXTENDED] Card parse indicator "
+                                f"url={card_page.url} product_index={url_to_index.get(card_page.url)} "
+                                f"first_characteristic={first_characteristic}"
+                            ),
+                            context={
+                                "batch": batch_idx,
+                                "url": card_page.url,
+                                "product_index": url_to_index.get(card_page.url),
+                                "first_characteristic": first_characteristic,
+                            },
+                        )
 
                         # прогресс по карточке
                         self._ui.inc_done(1)
