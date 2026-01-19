@@ -21,11 +21,13 @@ from pathlib import Path
 from typing import Optional
 
 import streamlit as st
+import httpx
 
 from app.pipeline.runner import ParserPipeline, PipelineConfig
 from app.app_logging.logbus import LogBus
 from app.ui.state import UIState, UIStatus, ensure_in_session
 from app.net.session_and_fetcher import SessionManager
+from app.net.window_limiter import SlidingWindowLimiter
 from app.net.auth import AuthConfig, FormAuthAdapter
 from app.core.parsing_mode import ParsingMode
 
@@ -39,6 +41,21 @@ FETCH_TIMEOUT_S = 25.0
 REQUEST_DELAY_S = 0.0
 REQUEST_DELAY_JITTER_S = 0.0
 LOG_POLL_INTERVAL_MS = 500
+RATE_LIMIT_MAX_REQUESTS = 0
+RATE_LIMIT_WINDOW_S = 0.0
+RATE_LIMIT_JITTER_MS = 25.0
+RATE_LIMIT_KEY_MODE = "host"
+
+
+def _build_limiter_key(url: str) -> str:
+    try:
+        parsed = httpx.URL(url)
+        host = parsed.host or str(parsed)
+        if RATE_LIMIT_KEY_MODE == "host_path":
+            return f"{host}{parsed.path}"
+        return host
+    except Exception:
+        return url
 
 
 def _init_singletons() -> tuple[UIState, LogBus]:
@@ -67,8 +84,16 @@ def _start_pipeline_in_background(urls: list[str], *, mode: ParsingMode) -> None
 
     ui_state.clear_stop()
 
-    limiter = None
+    limiter: SlidingWindowLimiter | None = None
     limiter_key_builder = None
+    if RATE_LIMIT_MAX_REQUESTS > 0 and RATE_LIMIT_WINDOW_S > 0:
+        limiter = SlidingWindowLimiter(
+            RATE_LIMIT_MAX_REQUESTS,
+            RATE_LIMIT_WINDOW_S,
+            jitter_ms=RATE_LIMIT_JITTER_MS,
+            log_bus=log_bus,
+        )
+        limiter_key_builder = _build_limiter_key
     session = SessionManager(
         log_bus=log_bus,
         limiter=limiter,

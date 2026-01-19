@@ -123,6 +123,8 @@ class SessionManager:
         self._is_authenticated: bool = False
 
     def _build_limiter_key(self, url: str) -> str:
+        if self._limiter_key_builder:
+            return self._limiter_key_builder(url)
         try:
             parsed = httpx.URL(url)
             base_key = parsed.host or str(parsed)

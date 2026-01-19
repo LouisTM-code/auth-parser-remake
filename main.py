@@ -10,6 +10,7 @@ Production entrypoint для Streamlit Cloud.
 - Безопасно переопределяет константы во время выполнения через Streamlit `secrets` или переменные окружения, без изменения `ui/app.py`:
   * AUTH_EMAIL, AUTH_PASSWORD (не логировать значения)
   * BATCH_SIZE, CONCURRENCY, FETCH_TIMEOUT_S
+  * RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_S, RATE_LIMIT_JITTER_MS, RATE_LIMIT_KEY_MODE
 
 Примечания:
 - Нет тяжёлой логики; UI/бизнес‑логика остаётся в модулях.
@@ -67,6 +68,10 @@ def _override_constants(mod: Any) -> None:
     batch_size = _get("BATCH_SIZE", int)
     concurrency = _get("CONCURRENCY", int)
     fetch_timeout = _get("FETCH_TIMEOUT_S", float)
+    rate_limit_max_requests = _get("RATE_LIMIT_MAX_REQUESTS", int)
+    rate_limit_window_s = _get("RATE_LIMIT_WINDOW_S", float)
+    rate_limit_jitter_ms = _get("RATE_LIMIT_JITTER_MS", float)
+    rate_limit_key_mode = _get("RATE_LIMIT_KEY_MODE", str)
 
     # Применяем, если заданы (не трогаем, если None)
     if auth_email is not None:
@@ -79,6 +84,14 @@ def _override_constants(mod: Any) -> None:
         setattr(mod, "CONCURRENCY", concurrency)
     if fetch_timeout is not None:
         setattr(mod, "FETCH_TIMEOUT_S", fetch_timeout)
+    if rate_limit_max_requests is not None:
+        setattr(mod, "RATE_LIMIT_MAX_REQUESTS", rate_limit_max_requests)
+    if rate_limit_window_s is not None:
+        setattr(mod, "RATE_LIMIT_WINDOW_S", rate_limit_window_s)
+    if rate_limit_jitter_ms is not None:
+        setattr(mod, "RATE_LIMIT_JITTER_MS", rate_limit_jitter_ms)
+    if rate_limit_key_mode is not None:
+        setattr(mod, "RATE_LIMIT_KEY_MODE", rate_limit_key_mode)
 
 
 def _render_app() -> None:
