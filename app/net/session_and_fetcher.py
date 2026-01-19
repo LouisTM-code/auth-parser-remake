@@ -19,7 +19,7 @@ import asyncio
 import math
 from dataclasses import dataclass
 from typing import Iterable, Final, Optional
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import random
 
 import httpx
@@ -27,6 +27,7 @@ import httpx
 from app.core.errors import HttpStatusError, NetworkError, TimeoutError_
 from app.core.utils_text import add_showall_params
 from app.app_logging.logbus import LogBus
+from app.net.window_limiter import SlidingWindowLimiter
 
 
 # Дефолтные константы для сессии/пула
@@ -74,7 +75,14 @@ class SessionManager:
         - Класс предназначен для использования в асинхронной среде.
     """
 
-    def __init__(self, cfg: Optional[SessionConfig] = None, *, log_bus: Optional[LogBus] = None) -> None:
+    def __init__(
+        self,
+        cfg: Optional[SessionConfig] = None,
+        *,
+        log_bus: Optional[LogBus] = None,
+        limiter: SlidingWindowLimiter | None = None,
+        limiter_key_builder: Callable[[str], str] | None = None,
+    ) -> None:
         if cfg is None:
             cfg = SessionConfig()
 
@@ -92,6 +100,8 @@ class SessionManager:
 
         self._cfg = cfg
         self._log = log_bus
+        self._limiter = limiter
+        self._limiter_key_builder = limiter_key_builder
         self._client = httpx.AsyncClient(
             base_url=self._cfg.base_url,
             http2=self._cfg.http2,
@@ -111,6 +121,41 @@ class SessionManager:
             verify=True,
         )
         self._is_authenticated: bool = False
+
+    def _build_limiter_key(self, url: str) -> str:
+        try:
+            parsed = httpx.URL(url)
+            base_key = parsed.host or str(parsed)
+        except Exception:
+            base_key = url
+        return self._limiter_key_builder(base_key) if self._limiter_key_builder else base_key
+
+    async def _apply_request_delay(
+        self,
+        url: str,
+        *,
+        key: str | None,
+        request_delay_s: float,
+        request_delay_jitter_s: float,
+    ) -> None:
+        if request_delay_s <= 0 and request_delay_jitter_s <= 0:
+            return
+        delay_s = max(0.0, request_delay_s)
+        jitter_s = max(0.0, request_delay_jitter_s)
+        if jitter_s:
+            delay_s += random.uniform(0.0, jitter_s)
+        if delay_s > 0:
+            if self._log:
+                self._log.info(
+                    "FETCH_DELAY",
+                    f"Applying request delay {delay_s:.3f}s before request: {url}",
+                    context={
+                        "url": url,
+                        "delay_s": round(delay_s, 3),
+                        "limiter_key": key,
+                    },
+                )
+            await asyncio.sleep(delay_s)
 
     # --------- свойства/служебные ---------
 
@@ -137,6 +182,9 @@ class SessionManager:
         max_retries: int = 2,
         retry_backoff_base: float = 0.3,
         acceptable_statuses: tuple[int, ...] = (200,),
+        request_delay_s: float = 0.0,
+        request_delay_jitter_s: float = 0.0,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> httpx.Response:
         """
         Выполняет GET с ручными ретраями.
@@ -154,7 +202,32 @@ class SessionManager:
 
         for attempt in range(max_retries + 1):
             try:
-                resp = await self._client.get(url, headers=headers)
+                limiter_key: str | None = None
+                if self._limiter is not None:
+                    limiter_key = self._build_limiter_key(url)
+                    if self._log:
+                        self._log.info(
+                            "RATE_LIMIT_KEY",
+                            "Preparing rate-limit key for GET",
+                            context={
+                                "url": url,
+                                "limiter_key": limiter_key,
+                                "attempt": attempt + 1,
+                                "max_retries": max_retries,
+                            },
+                        )
+                    await self._limiter.acquire(limiter_key)
+                await self._apply_request_delay(
+                    url,
+                    key=limiter_key,
+                    request_delay_s=request_delay_s,
+                    request_delay_jitter_s=request_delay_jitter_s,
+                )
+                if semaphore:
+                    async with semaphore:
+                        resp = await self._client.get(url, headers=headers)
+                else:
+                    resp = await self._client.get(url, headers=headers)
                 if acceptable_statuses and resp.status_code in acceptable_statuses:
                     return resp
                 if resp.status_code in self._cfg.retry_statuses and attempt < max_retries:
@@ -219,6 +292,9 @@ class SessionManager:
         max_retries: int = 1,
         retry_backoff_base: float = 0.3,
         acceptable_statuses: tuple[int, ...] = (200,),
+        request_delay_s: float = 0.0,
+        request_delay_jitter_s: float = 0.0,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> httpx.Response:
         """
         Выполняет POST с ручными ретраями на сетевые сбои/таймауты.
@@ -229,7 +305,32 @@ class SessionManager:
 
         for attempt in range(max_retries + 1):
             try:
-                resp = await self._client.post(url, data=data, headers=headers)
+                limiter_key: str | None = None
+                if self._limiter is not None:
+                    limiter_key = self._build_limiter_key(url)
+                    if self._log:
+                        self._log.info(
+                            "RATE_LIMIT_KEY",
+                            "Preparing rate-limit key for POST",
+                            context={
+                                "url": url,
+                                "limiter_key": limiter_key,
+                                "attempt": attempt + 1,
+                                "max_retries": max_retries,
+                            },
+                        )
+                    await self._limiter.acquire(limiter_key)
+                await self._apply_request_delay(
+                    url,
+                    key=limiter_key,
+                    request_delay_s=request_delay_s,
+                    request_delay_jitter_s=request_delay_jitter_s,
+                )
+                if semaphore:
+                    async with semaphore:
+                        resp = await self._client.post(url, data=data, headers=headers)
+                else:
+                    resp = await self._client.post(url, data=data, headers=headers)
                 if acceptable_statuses and resp.status_code in acceptable_statuses:
                     return resp
                 if resp.status_code in self._cfg.retry_statuses and attempt < max_retries:
@@ -330,47 +431,26 @@ class PageFetcher:
         concurrency: int = 24,
         request_delay_s: float = 0.0,
         request_delay_jitter_s: float = 0.0,
-        limiter: Optional[asyncio.Semaphore] = None,
         log_bus: Optional[LogBus] = None,
     ) -> None:
         self._session = session
         self._sem = asyncio.Semaphore(max(1, concurrency))
         self._request_delay_s = max(0.0, request_delay_s)
         self._request_delay_jitter_s = max(0.0, request_delay_jitter_s)
-        self._limiter = limiter
         self._log = log_bus
-
-    async def _wait_limiter(self) -> None:
-        if self._limiter is None:
-            return
-        async with self._limiter:
-            return
 
     async def _fetch_one(self, url: str, *, add_showall_params_flag: bool) -> FetchedPage:
         # Для листинга: гарантируем SHOWALL_* параметры.
         # Для карточек: add_showall_params_flag=False => URL не изменяем.
         requested_url = add_showall_params(url) if add_showall_params_flag else url
 
-        await self._wait_limiter()
-        delay_s = 0.0
-        if self._request_delay_s or self._request_delay_jitter_s:
-            delay_s = self._request_delay_s + (
-                random.uniform(0.0, self._request_delay_jitter_s) if self._request_delay_jitter_s else 0.0
-            )
-            if delay_s > 0:
-                if self._log:
-                    self._log.info(
-                        "FETCH_DELAY",
-                        f"Applying request delay {delay_s:.3f}s before GET: {requested_url}",
-                        context={
-                            "url": requested_url,
-                            "delay_s": round(delay_s, 3),
-                        },
-                    )
-                await asyncio.sleep(delay_s)
         try:
-            async with self._sem:
-                resp = await self._session.get(requested_url)
+            resp = await self._session.get(
+                requested_url,
+                request_delay_s=self._request_delay_s,
+                request_delay_jitter_s=self._request_delay_jitter_s,
+                semaphore=self._sem,
+            )
             return FetchedPage(
                 url=requested_url,
                 status=resp.status_code,

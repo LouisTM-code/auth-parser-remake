@@ -67,7 +67,13 @@ def _start_pipeline_in_background(urls: list[str], *, mode: ParsingMode) -> None
 
     ui_state.clear_stop()
 
-    session = SessionManager(log_bus=log_bus)
+    limiter = None
+    limiter_key_builder = None
+    session = SessionManager(
+        log_bus=log_bus,
+        limiter=limiter,
+        limiter_key_builder=limiter_key_builder,
+    )
     auth = FormAuthAdapter(AuthConfig(email=AUTH_EMAIL, password=AUTH_PASSWORD))
     cfg = PipelineConfig(
         batch_size=BATCH_SIZE,
