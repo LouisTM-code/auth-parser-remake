@@ -50,6 +50,8 @@ class PipelineConfig:
 
     parsing_mode: ParsingMode = ParsingMode.SHALLOW
     cards_batch_size: int = 60
+    request_delay_s: float = 0.0
+    request_delay_jitter_s: float = 0.0
 
 
 class ParserPipeline:
@@ -85,7 +87,13 @@ class ParserPipeline:
 
         self._cfg = config or PipelineConfig()
 
-        self._fetcher = fetcher or PageFetcher(session=self._session, concurrency=self._cfg.concurrency)
+        self._fetcher = fetcher or PageFetcher(
+            session=self._session,
+            concurrency=self._cfg.concurrency,
+            request_delay_s=self._cfg.request_delay_s,
+            request_delay_jitter_s=self._cfg.request_delay_jitter_s,
+            log_bus=self._log,
+        )
 
         # Экстрактор листинга:
         # - в extended включаем сбор product_url

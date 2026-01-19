@@ -20,11 +20,13 @@ import math
 from dataclasses import dataclass
 from typing import Iterable, Final, Optional
 from collections.abc import Mapping
+import random
 
 import httpx
 
 from app.core.errors import HttpStatusError, NetworkError, TimeoutError_
 from app.core.utils_text import add_showall_params
+from app.app_logging.logbus import LogBus
 
 
 # Дефолтные константы для сессии/пула
@@ -56,6 +58,7 @@ class SessionConfig:
     max_keepalive_connections: int = 20
     http2: bool = True
     default_headers: Mapping[str, str] | None = None  # подставим ниже
+    retry_statuses: tuple[int, ...] = (429, 500, 502, 503, 504)
 
 
 class SessionManager:
@@ -71,7 +74,7 @@ class SessionManager:
         - Класс предназначен для использования в асинхронной среде.
     """
 
-    def __init__(self, cfg: Optional[SessionConfig] = None) -> None:
+    def __init__(self, cfg: Optional[SessionConfig] = None, *, log_bus: Optional[LogBus] = None) -> None:
         if cfg is None:
             cfg = SessionConfig()
 
@@ -88,6 +91,7 @@ class SessionManager:
             self._default_headers = dict(cfg.default_headers)
 
         self._cfg = cfg
+        self._log = log_bus
         self._client = httpx.AsyncClient(
             base_url=self._cfg.base_url,
             http2=self._cfg.http2,
@@ -151,6 +155,22 @@ class SessionManager:
         for attempt in range(max_retries + 1):
             try:
                 resp = await self._client.get(url, headers=headers)
+                if acceptable_statuses and resp.status_code in acceptable_statuses:
+                    return resp
+                if resp.status_code in self._cfg.retry_statuses and attempt < max_retries:
+                    if self._log:
+                        self._log.warn(
+                            "FETCH_RETRY_STATUS",
+                            f"Retrying GET after status {resp.status_code}: {url}",
+                            context={
+                                "url": url,
+                                "status": resp.status_code,
+                                "attempt": attempt + 1,
+                                "max_retries": max_retries,
+                            },
+                        )
+                    await asyncio.sleep(retry_backoff_base * math.pow(2, attempt))
+                    continue
                 if acceptable_statuses and resp.status_code not in acceptable_statuses:
                     raise HttpStatusError(resp.status_code, url)
                 return resp
@@ -158,10 +178,31 @@ class SessionManager:
                 last_err = e
                 if attempt >= max_retries:
                     raise TimeoutError_(f"GET timeout after {attempt+1} attempts: {url}") from e
+                if self._log:
+                    self._log.warn(
+                        "FETCH_RETRY_TIMEOUT",
+                        f"Retrying GET after timeout: {url}",
+                        context={
+                            "url": url,
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
+                    )
             except (httpx.ConnectError, httpx.NetworkError) as e:  # NetworkError базовый для ряда сбоев
                 last_err = e
                 if attempt >= max_retries:
                     raise NetworkError(f"GET network error after {attempt+1} attempts: {url}") from e
+                if self._log:
+                    self._log.warn(
+                        "FETCH_RETRY_NETWORK",
+                        f"Retrying GET after network error: {url}",
+                        context={
+                            "url": url,
+                            "error": repr(e),
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
+                    )
             # экспоненциальная задержка
             await asyncio.sleep(retry_backoff_base * math.pow(2, attempt))
 
@@ -189,6 +230,22 @@ class SessionManager:
         for attempt in range(max_retries + 1):
             try:
                 resp = await self._client.post(url, data=data, headers=headers)
+                if acceptable_statuses and resp.status_code in acceptable_statuses:
+                    return resp
+                if resp.status_code in self._cfg.retry_statuses and attempt < max_retries:
+                    if self._log:
+                        self._log.warn(
+                            "FETCH_RETRY_STATUS",
+                            f"Retrying POST after status {resp.status_code}: {url}",
+                            context={
+                                "url": url,
+                                "status": resp.status_code,
+                                "attempt": attempt + 1,
+                                "max_retries": max_retries,
+                            },
+                        )
+                    await asyncio.sleep(retry_backoff_base * math.pow(2, attempt))
+                    continue
                 if acceptable_statuses and resp.status_code not in acceptable_statuses:
                     raise HttpStatusError(resp.status_code, url)
                 return resp
@@ -196,10 +253,31 @@ class SessionManager:
                 last_err = e
                 if attempt >= max_retries:
                     raise TimeoutError_(f"POST timeout after {attempt+1} attempts: {url}") from e
+                if self._log:
+                    self._log.warn(
+                        "FETCH_RETRY_TIMEOUT",
+                        f"Retrying POST after timeout: {url}",
+                        context={
+                            "url": url,
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
+                    )
             except (httpx.ConnectError, httpx.NetworkError) as e:
                 last_err = e
                 if attempt >= max_retries:
                     raise NetworkError(f"POST network error after {attempt+1} attempts: {url}") from e
+                if self._log:
+                    self._log.warn(
+                        "FETCH_RETRY_NETWORK",
+                        f"Retrying POST after network error: {url}",
+                        context={
+                            "url": url,
+                            "error": repr(e),
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                        },
+                    )
             await asyncio.sleep(retry_backoff_base * math.pow(2, attempt))
 
         assert last_err is not None
@@ -245,9 +323,20 @@ class PageFetcher:
         - fetch_many(..., add_showall_params=False) для карточек товара.
     """
 
-    def __init__(self, session: SessionManager, *, concurrency: int = 24) -> None:
+    def __init__(
+        self,
+        session: SessionManager,
+        *,
+        concurrency: int = 24,
+        request_delay_s: float = 0.0,
+        request_delay_jitter_s: float = 0.0,
+        log_bus: Optional[LogBus] = None,
+    ) -> None:
         self._session = session
         self._sem = asyncio.Semaphore(max(1, concurrency))
+        self._request_delay_s = max(0.0, request_delay_s)
+        self._request_delay_jitter_s = max(0.0, request_delay_jitter_s)
+        self._log = log_bus
 
     async def _fetch_one(self, url: str, *, add_showall_params_flag: bool) -> FetchedPage:
         # Для листинга: гарантируем SHOWALL_* параметры.
@@ -255,6 +344,22 @@ class PageFetcher:
         requested_url = add_showall_params(url) if add_showall_params_flag else url
 
         async with self._sem:
+            delay_s = 0.0
+            if self._request_delay_s or self._request_delay_jitter_s:
+                delay_s = self._request_delay_s + (
+                    random.uniform(0.0, self._request_delay_jitter_s) if self._request_delay_jitter_s else 0.0
+                )
+                if delay_s > 0:
+                    if self._log:
+                        self._log.info(
+                            "FETCH_DELAY",
+                            f"Applying request delay {delay_s:.3f}s before GET: {requested_url}",
+                            context={
+                                "url": requested_url,
+                                "delay_s": round(delay_s, 3),
+                            },
+                        )
+                    await asyncio.sleep(delay_s)
             try:
                 resp = await self._session.get(requested_url)
                 return FetchedPage(
