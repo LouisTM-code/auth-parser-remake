@@ -34,8 +34,10 @@ AUTH_EMAIL = "info@stankoopt.ru"
 AUTH_PASSWORD = "cnc1.ru"
 
 BATCH_SIZE = 10
-CONCURRENCY = 24
+CONCURRENCY = 15
 FETCH_TIMEOUT_S = 25.0
+REQUEST_DELAY_S = 0.3
+REQUEST_DELAY_JITTER_S = 0.2
 LOG_POLL_INTERVAL_MS = 500
 
 
@@ -65,12 +67,14 @@ def _start_pipeline_in_background(urls: list[str], *, mode: ParsingMode) -> None
 
     ui_state.clear_stop()
 
-    session = SessionManager()
+    session = SessionManager(log_bus=log_bus)
     auth = FormAuthAdapter(AuthConfig(email=AUTH_EMAIL, password=AUTH_PASSWORD))
     cfg = PipelineConfig(
         batch_size=BATCH_SIZE,
         concurrency=CONCURRENCY,
         fetch_timeout_s=FETCH_TIMEOUT_S,
+        request_delay_s=REQUEST_DELAY_S,
+        request_delay_jitter_s=REQUEST_DELAY_JITTER_S,
         parsing_mode=mode,  # NEW
     )
 
