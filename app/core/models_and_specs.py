@@ -176,6 +176,16 @@ FIELD_SPECS: list[FieldSpec] = [
         ],
     ),
     FieldSpec(
+        name="Бренд",
+        selectors=[
+            SelectorVariant(
+                selector="div.brand_flex img",
+                extract=ExtractType.ATTR,
+                attr="title",
+            ),
+        ],
+    ),
+    FieldSpec(
         name="Оптовая_цена",
         selectors=[
             SelectorVariant(
