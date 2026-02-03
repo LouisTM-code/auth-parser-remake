@@ -39,6 +39,7 @@ class CardExtractorConfig:
 
     base_field_names: tuple[str, ...] = (
         "Товар",
+        "Бренд",
         "Артикул",
         "Наличие",
         "Розничная_цена",

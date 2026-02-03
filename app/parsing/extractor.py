@@ -48,6 +48,7 @@ class ExtractorConfig:
     page_container_selector: str = "div.inner_wrapper"
     treat_wholesale_missing_as_error: bool = False
     collect_product_url: bool = False
+    exclude_field_names: tuple[str, ...] = ("Бренд",)
 
 
 @dataclass(slots=True)
@@ -78,8 +79,12 @@ class ProductExtractor:
         field_specs: list[FieldSpec] | None = None,
         config: ExtractorConfig | None = None,
     ) -> None:
-        self._specs: list[FieldSpec] = field_specs or FIELD_SPECS
         self._cfg = config or ExtractorConfig()
+        specs = field_specs or FIELD_SPECS
+        if self._cfg.exclude_field_names:
+            self._specs = [s for s in specs if s.name not in self._cfg.exclude_field_names]
+        else:
+            self._specs = list(specs)
 
         if not self._specs:
             raise ValueError("FIELD_SPECS must not be empty")
