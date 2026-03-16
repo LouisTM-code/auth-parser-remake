@@ -2,7 +2,7 @@
 Сетевой слой: HTTP-сессия и конкурентная выборка страниц.
 
 Состав:
-- SessionManager: единый httpx.AsyncClient (HTTP/2, keep-alive, CookieJar),
+- SessionManager: пара httpx.AsyncClient (основной + heavy для SHOWALL),
   методы get/post/is_authenticated/close, явная отметка успешного логина.
 - PageFetcher: конкурентный GET по очереди URL с ограничением параллелизма.
 
@@ -53,7 +53,7 @@ class SessionConfig:
     """
     base_url: str = ""
     connect_timeout_s: float = 5.0
-    read_timeout_s: float = 10.0
+    read_timeout_s: float = 30.0
     max_connections: int = 64
     max_keepalive_connections: int = 20
     http2: bool = True
@@ -63,10 +63,12 @@ class SessionConfig:
 
 class SessionManager:
     """
-    Обёртка над httpx.AsyncClient: общий клиент, CookieJar, таймауты/пул/HTTP2.
+    Обёртка над httpx.AsyncClient: основной и heavy-клиенты, CookieJar,
+    таймауты/пул/HTTP2.
 
     Задачи:
-        - Создаёт и хранит один AsyncClient на процесс парсинга.
+        - Создаёт и хранит основной AsyncClient для login/API.
+        - Создаёт и хранит heavy AsyncClient для больших SHOWALL-страниц.
         - Предоставляет методы GET/POST.
         - Держит флаг аутентификации (устанавливается адаптером авторизации).
 
@@ -97,6 +99,7 @@ class SessionManager:
         self._protocol_error_counts_by_url: dict[str, int] = {}
         self._protocol_error_threshold = 2
         self._client = self._build_client(http2=self._http2_enabled)
+        self._heavy_client = self._build_client(http2=True)
         self._is_authenticated: bool = False
 
     # --------- свойства/служебные ---------
@@ -134,11 +137,29 @@ class SessionManager:
             verify=True,
         )
 
+    def sync_cookies(self) -> None:
+        """
+        Синхронизирует cookie из основного клиента в heavy-клиент.
+
+        Роль и ответственность:
+            - Обновить cookie-контекст heavy-клиента после успешного login.
+        Границы:
+            - Не выполняет сетевые запросы.
+            - Не меняет cookie основного клиента.
+        Взаимодействие:
+            - Вызывается адаптером авторизации сразу после LOGIN_OK.
+        """
+        self._heavy_client.cookies.clear()
+        self._heavy_client.cookies.update(self._client.cookies)
+
     async def reset_client(self, *, http2: bool) -> None:
         """Пересоздаёт клиент с указанным флагом HTTP/2."""
+        cookies_snapshot = httpx.Cookies(self._client.cookies)
         await self._client.aclose()
         self._client = self._build_client(http2=http2)
+        self._client.cookies.update(cookies_snapshot)
         self._http2_enabled = http2
+        self.sync_cookies()
 
     # --------- сетевые операции ---------
 
@@ -167,7 +188,15 @@ class SessionManager:
 
         for attempt in range(max_retries + 1):
             try:
-                resp = await self._client.get(url, headers=headers)
+                request_headers = self._default_headers.copy()
+                if headers:
+                    request_headers.update(headers)
+                request_headers.setdefault("Referer", url)
+
+                if "SHOWALL" in url:
+                    resp = await self._heavy_client.get(url, headers=request_headers)
+                else:
+                    resp = await self._client.get(url, headers=request_headers)
                 if acceptable_statuses and resp.status_code in acceptable_statuses:
                     self._protocol_error_count = 0
                     self._protocol_error_counts_by_url.pop(url, None)
@@ -342,8 +371,9 @@ class SessionManager:
         raise last_err  # pragma: no cover
 
     async def close(self) -> None:
-        """Закрывает внутренний AsyncClient."""
+        """Закрывает основной и heavy AsyncClient."""
         await self._client.aclose()
+        await self._heavy_client.aclose()
 
 
 # ----------------------------- Fetcher ---------------------------------
