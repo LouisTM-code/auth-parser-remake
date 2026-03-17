@@ -22,7 +22,7 @@ from app.core.errors import (
     StopRequestedError,
     ErrorCode,
 )
-from app.core.models_and_specs import FIELD_SPECS
+from app.core.models_and_specs import FIELD_SPECS, ParseIssue
 from app.core.parsing_mode import ParsingMode
 from app.app_logging.logbus import LogBus
 from app.ui.state import UIState, UIStatus
@@ -115,6 +115,109 @@ class ParserPipeline:
 
         # groups: list[{"page_title": str, "data": list[dict|dataclass]}]
         self._groups: list[dict] = []
+
+    def _log_issue_summary(self, *, stage: str, issues: list[ParseIssue], source_url: str) -> None:
+        """
+        Логирует агрегированную диагностику parse issues для этапа пайплайна.
+
+        Роль и ответственность:
+        - Сформировать компактный отчёт по кодам ошибок и количеству issue.
+        - Добавить sample деталей первой ошибки для ускорения root-cause анализа.
+
+        Границы:
+        - Не модифицирует данные парсинга и не влияет на поведение экспорта.
+        - Не занимается фильтрацией, восстановлением или повторным парсингом.
+
+        Взаимодействие с другими ролями:
+        - Получает список ParseIssue от extract/aggregate уровней.
+        - Публикует результат через LogBus для отображения в UI и журналах.
+        """
+        if not issues:
+            return
+
+        code_counters: dict[str, int] = {}
+        for issue in issues:
+            code_counters[issue.code] = code_counters.get(issue.code, 0) + 1
+
+        sample_issue = issues[0]
+        self._log.warn(
+            "PARSE_ISSUES_SUMMARY",
+            (
+                f"{stage}: parse issues={len(issues)} url={source_url} "
+                f"codes={code_counters} sample={sample_issue.code}:{sample_issue.details}"
+            ),
+            context={
+                "stage": stage,
+                "url": source_url,
+                "issues_total": len(issues),
+                "codes": code_counters,
+                "sample": {
+                    "field_name": sample_issue.field_name,
+                    "code": sample_issue.code,
+                    "details": sample_issue.details,
+                },
+            },
+        )
+
+    def _log_listing_dom_diagnostics(self, *, html: str, source_url: str, stage: str) -> None:
+        """
+        Логирует диагностический срез HTML/DOM для ошибок поиска контейнера листинга.
+
+        Роль и ответственность:
+        - Зафиксировать метрики, нужные для RCA проблем с селекторами и DOM-парсингом.
+        - Показать расхождение между наличием маркера в сыром HTML и результатами CSS-поиска.
+
+        Границы:
+        - Не изменяет HTML, селекторы и результат бизнес-парсинга.
+        - Не выполняет повторных HTTP-запросов и не инициирует fallback-парсеры.
+
+        Взаимодействие с другими ролями:
+        - Вызывается после получения ParseIssue с кодом ERR_CONTAINER_NOT_FOUND.
+        - Пишет агрегированную диагностику в LogBus для UI и журналов.
+        """
+        try:
+            try:
+                from selectolax.lexbor import LexborHTMLParser as html_parser  # type: ignore
+            except Exception:  # pragma: no cover
+                from selectolax.parser import HTMLParser as html_parser  # type: ignore
+
+            tree = html_parser(html)
+            root = tree.root
+            all_nodes = len(root.css("*")) if root is not None else 0
+            div_inner_wrapper_count = len(root.css("div.inner_wrapper")) if root is not None else 0
+            any_inner_wrapper_count = len(root.css(".inner_wrapper")) if root is not None else 0
+            section_inner_wrapper_count = len(root.css("section.inner_wrapper")) if root is not None else 0
+            dashed_inner_wrapper_count = len(root.css(".inner-wrapper")) if root is not None else 0
+
+            self._log.warn(
+                "LISTING_DOM_DIAGNOSTICS",
+                (
+                    f"{stage}: listing DOM diagnostics url={source_url} "
+                    f"html_bytes={len(html)} html_kb={len(html) / 1024:.2f} "
+                    f"has_inner_wrapper_token={'inner_wrapper' in html} "
+                    f"nodes_total={all_nodes} "
+                    f"div_inner_wrapper={div_inner_wrapper_count} any_inner_wrapper={any_inner_wrapper_count} "
+                    f"section_inner_wrapper={section_inner_wrapper_count} dashed_inner_wrapper={dashed_inner_wrapper_count}"
+                ),
+                context={
+                    "stage": stage,
+                    "url": source_url,
+                    "html_bytes": len(html),
+                    "html_kb": round(len(html) / 1024, 2),
+                    "has_inner_wrapper_token": "inner_wrapper" in html,
+                    "nodes_total": all_nodes,
+                    "div_inner_wrapper": div_inner_wrapper_count,
+                    "any_inner_wrapper": any_inner_wrapper_count,
+                    "section_inner_wrapper": section_inner_wrapper_count,
+                    "dashed_inner_wrapper": dashed_inner_wrapper_count,
+                },
+            )
+        except Exception as exc:
+            self._log.warn(
+                "LISTING_DOM_DIAGNOSTICS_FAILED",
+                f"{stage}: listing diagnostics failed for url={source_url} err={exc!r}",
+                context={"stage": stage, "url": source_url, "error": repr(exc)},
+            )
 
     async def run(self, urls: Iterable[str]) -> None:
         unique_urls = self._dedupe_keep_order(urls)
@@ -213,6 +316,13 @@ class ParserPipeline:
                 products, issues, page_title = self._extractor.extract(page.text, task_id=batch_idx)
                 if issues:
                     parse_issues += len(issues)
+                    self._log_issue_summary(stage="SHALLOW_LISTING", issues=issues, source_url=page.url)
+                    if any(issue.code == "ERR_CONTAINER_NOT_FOUND" for issue in issues):
+                        self._log_listing_dom_diagnostics(
+                            html=page.text,
+                            source_url=page.url,
+                            stage="SHALLOW_LISTING",
+                        )
 
                 products = self._normalizer.normalize(products)
 
@@ -316,6 +426,13 @@ class ParserPipeline:
                 )
                 if issues:
                     listing_issues += len(issues)
+                    self._log_issue_summary(stage="EXTENDED_LISTING", issues=issues, source_url=listing_page.url)
+                    if any(issue.code == "ERR_CONTAINER_NOT_FOUND" for issue in issues):
+                        self._log_listing_dom_diagnostics(
+                            html=listing_page.text,
+                            source_url=listing_page.url,
+                            stage="EXTENDED_LISTING",
+                        )
 
                 # Листинг считаем обработанным (единица прогресса)
                 self._ui.inc_done(1)
@@ -415,6 +532,11 @@ class ParserPipeline:
                         )
                         if card_data.issues:
                             card_issues += len(card_data.issues)
+                            self._log_issue_summary(
+                                stage="EXTENDED_CARD",
+                                issues=card_data.issues,
+                                source_url=card_page.url,
+                            )
 
                         card_data_obj_by_url[card_page.url] = card_data
                         card_data_by_url[card_page.url] = card_data.values
@@ -470,6 +592,11 @@ class ParserPipeline:
                     rec, agg_issues = self._aggregator.aggregate(p, card_obj)
                     if agg_issues:
                         merge_issues += len(agg_issues)
+                        self._log_issue_summary(
+                            stage="EXTENDED_AGGREGATE",
+                            issues=agg_issues,
+                            source_url=p.product_url or listing_page.url,
+                        )
                     records.append(rec)
 
                 # 6) Нормализация dict-записей
