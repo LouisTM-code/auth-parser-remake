@@ -137,5 +137,4 @@ class FormAuthAdapter(BaseAuthAdapter):
             )
         
         session.mark_authenticated(True)
-        session.sync_cookies()
         return AuthResult(ok=True, message="Login successful")
