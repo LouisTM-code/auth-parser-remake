@@ -34,10 +34,13 @@ AUTH_EMAIL = "info@stankoopt.ru"
 AUTH_PASSWORD = "cnc1.ru"
 
 BATCH_SIZE = 10
-CONCURRENCY = 15
-FETCH_TIMEOUT_S = 25.0
-REQUEST_DELAY_S = 0.3
-REQUEST_DELAY_JITTER_S = 0.2
+CONCURRENCY = 6
+# Внутренний httpx read_timeout=10s (SessionConfig) с 2 ретраями даёт до
+# ~10+0.3+10+0.6+10=30.9s на один URL — FETCH_TIMEOUT_S должен это перекрывать,
+# иначе внешний wait_for обрывает задачу раньше, чем успеют отработать внутренние ретраи.
+FETCH_TIMEOUT_S = 35.0
+REQUEST_DELAY_S = 0.6
+REQUEST_DELAY_JITTER_S = 0.4
 LOG_POLL_INTERVAL_MS = 500
 
 
@@ -228,6 +231,16 @@ with st.container():
 st.subheader("Логи")
 _append_logs_to_buffer()
 _render_logs()
+
+log_lines = st.session_state.get("log_lines", [])
+st.download_button(
+    "⬇️ Скачать логи",
+    data="\n".join(log_lines).encode("utf-8"),
+    file_name=f"parser_logs_{time.strftime('%Y%m%d_%H%M%S')}.log",
+    mime="text/plain",
+    disabled=not log_lines,
+    use_container_width=True,
+)
 
 worker = _get_worker_thread()
 if worker and worker.is_alive() and ui_state.status in (UIStatus.RUNNING, UIStatus.STOPPED):

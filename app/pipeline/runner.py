@@ -216,6 +216,21 @@ class ParserPipeline:
 
                 products = self._normalizer.normalize(products)
 
+                self._log.debug(
+                    "PAGE_PARSE_DETAILS",
+                    (
+                        f"[SHALLOW] Listing parsed url={page.url} title={page_title!r} "
+                        f"products={len(products)} issues={len(issues)}"
+                    ),
+                    context={
+                        "batch": batch_idx,
+                        "url": page.url,
+                        "page_title": page_title,
+                        "products": len(products),
+                        "issues": len(issues),
+                    },
+                )
+
                 self._groups.append({
                     "page_title": page_title or page.url,
                     "data": products,
