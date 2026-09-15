@@ -337,6 +337,23 @@ class ParserPipeline:
 
                 # 2) Сбор ссылок карточек (дедуп по URL, порядок сохраняем)
                 card_urls = self._dedupe_keep_order([p.product_url for p in partials if p.product_url])
+
+                self._log.debug(
+                    "LISTING_PARSE_DETAILS",
+                    (
+                        f"[EXTENDED] Listing parsed url={listing_page.url} title={page_title!r} "
+                        f"partials={len(partials)} card_urls={len(card_urls)} issues={len(issues)}"
+                    ),
+                    context={
+                        "batch": batch_idx,
+                        "url": listing_page.url,
+                        "page_title": page_title,
+                        "partials": len(partials),
+                        "card_urls": len(card_urls),
+                        "issues": len(issues),
+                    },
+                )
+
                 base_field_names = {spec.name for spec in FIELD_SPECS}
                 url_to_index: dict[str, int] = {}
                 for p in partials:

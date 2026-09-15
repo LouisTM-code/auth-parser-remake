@@ -35,10 +35,10 @@ AUTH_PASSWORD = "cnc1.ru"
 
 BATCH_SIZE = 10
 CONCURRENCY = 6
-# Внутренний httpx read_timeout=10s (SessionConfig) с 2 ретраями даёт до
-# ~10+0.3+10+0.6+10=30.9s на один URL — FETCH_TIMEOUT_S должен это перекрывать,
-# иначе внешний wait_for обрывает задачу раньше, чем успеют отработать внутренние ретраи.
-FETCH_TIMEOUT_S = 35.0
+# Внутренний httpx read_timeout=20s (SessionConfig) с 1 ретраем даёт до
+# ~20+0.3+20=40.3s на один URL — FETCH_TIMEOUT_S должен это перекрывать,
+# иначе внешний wait_for обрывает задачу раньше, чем успеет отработать внутренний ретрай.
+FETCH_TIMEOUT_S = 45.0
 REQUEST_DELAY_S = 0.6
 REQUEST_DELAY_JITTER_S = 0.4
 LOG_POLL_INTERVAL_MS = 500
