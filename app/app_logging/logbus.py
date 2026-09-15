@@ -20,7 +20,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 import asyncio
 
-LogLevel = Literal["INFO", "WARN", "ERROR"]
+LogLevel = Literal["DEBUG", "INFO", "WARN", "ERROR"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -47,6 +47,7 @@ class LogBus:
     Неблокирующая очередь логов с батч-выгрузкой.
 
     Публичный API:
+        debug(code, msg, context=None) -> None
         info(code, msg, context=None)  -> None
         warn(code, msg, context=None)  -> None
         error(code, msg, context=None) -> None
@@ -61,6 +62,9 @@ class LogBus:
         self._q: asyncio.Queue[LogEvent] = asyncio.Queue(maxsize=max_queue_size)
 
     # ---------- Паблик-обёртки под уровни ----------
+
+    def debug(self, code: str, msg: str, context: Optional[Any] = None) -> None:
+        self.push(self._make_event("DEBUG", code, msg, context))
 
     def info(self, code: str, msg: str, context: Optional[Any] = None) -> None:
         self.push(self._make_event("INFO", code, msg, context))

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 from dataclasses import dataclass
 from typing import Iterable, Final, Optional
 from collections.abc import Mapping
@@ -52,8 +53,10 @@ class SessionConfig:
         default_headers: Базовые заголовки клиента (User-Agent и т.д.).
     """
     base_url: str = ""
-    connect_timeout_s: float = 5.0
-    read_timeout_s: float = 10.0
+    connect_timeout_s: float = 8.0
+    # 10s было мало: тяжёлые SHOWALL-листинги (полный каталог без пагинации)
+    # стабильно не укладываются в 10с независимо от параллелизма запросов.
+    read_timeout_s: float = 20.0
     max_connections: int = 64
     max_keepalive_connections: int = 20
     http2: bool = True
@@ -147,7 +150,7 @@ class SessionManager:
         url: str,
         *,
         headers: Optional[dict[str, str]] = None,
-        max_retries: int = 2,
+        max_retries: int = 1,
         retry_backoff_base: float = 0.3,
         acceptable_statuses: tuple[int, ...] = (200,),
     ) -> httpx.Response:
@@ -166,11 +169,24 @@ class SessionManager:
         last_err: Exception | None = None
 
         for attempt in range(max_retries + 1):
+            attempt_started = time.monotonic()
             try:
                 resp = await self._client.get(url, headers=headers)
+                elapsed_s = time.monotonic() - attempt_started
                 if acceptable_statuses and resp.status_code in acceptable_statuses:
                     self._protocol_error_count = 0
                     self._protocol_error_counts_by_url.pop(url, None)
+                    if self._log:
+                        self._log.debug(
+                            "FETCH_OK",
+                            f"GET ok in {elapsed_s:.2f}s (attempt {attempt + 1}): {url}",
+                            context={
+                                "url": url,
+                                "status": resp.status_code,
+                                "elapsed_s": round(elapsed_s, 3),
+                                "attempt": attempt + 1,
+                            },
+                        )
                     return resp
                 if resp.status_code in self._cfg.retry_statuses and attempt < max_retries:
                     if self._log:
@@ -234,29 +250,43 @@ class SessionManager:
                     )
             except httpx.ReadTimeout as e:
                 last_err = e
+                elapsed_s = time.monotonic() - attempt_started
                 if attempt >= max_retries:
+                    if self._log:
+                        self._log.debug(
+                            "FETCH_TIMEOUT_FINAL",
+                            f"GET timed out after {elapsed_s:.2f}s, no retries left: {url}",
+                            context={
+                                "url": url,
+                                "elapsed_s": round(elapsed_s, 3),
+                                "attempt": attempt + 1,
+                            },
+                        )
                     raise TimeoutError_(f"GET timeout after {attempt+1} attempts: {url}") from e
                 if self._log:
                     self._log.warn(
                         "FETCH_RETRY_TIMEOUT",
-                        f"Retrying GET after timeout: {url}",
+                        f"Retrying GET after timeout ({elapsed_s:.2f}s): {url}",
                         context={
                             "url": url,
+                            "elapsed_s": round(elapsed_s, 3),
                             "attempt": attempt + 1,
                             "max_retries": max_retries,
                         },
                     )
             except (httpx.ConnectError, httpx.NetworkError) as e:  # NetworkError базовый для ряда сбоев
                 last_err = e
+                elapsed_s = time.monotonic() - attempt_started
                 if attempt >= max_retries:
                     raise NetworkError(f"GET network error after {attempt+1} attempts: {url}") from e
                 if self._log:
                     self._log.warn(
                         "FETCH_RETRY_NETWORK",
-                        f"Retrying GET after network error: {url}",
+                        f"Retrying GET after network error ({elapsed_s:.2f}s): {url}",
                         context={
                             "url": url,
                             "error": repr(e),
+                            "elapsed_s": round(elapsed_s, 3),
                             "attempt": attempt + 1,
                             "max_retries": max_retries,
                         },
